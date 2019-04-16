@@ -57,7 +57,7 @@ class Trainer:
         
         if self.load_checkpoint: self._resume_from_checkpoint()
         max_acc = self._init_max_acc
-        best_epoch = self.start_epoch
+        best_epoch = self.start_epoch-1
 
         self.model.cuda()
         self.criterion.cuda()
@@ -88,7 +88,7 @@ class Trainer:
                                 acc, epoch, max_acc, best_epoch))
 
             self.save_checkpoint({
-                'epoch': epoch + 1,
+                'epoch': epoch+1,
                 'state_dict': self.model.state_dict(),
                 'max_acc': max_acc,
             }, is_best, file_name='checkpoint_latest.pkl')
@@ -98,7 +98,7 @@ class Trainer:
             if self._resume_from_checkpoint():
                 self.model.cuda()
                 self.criterion.cuda()
-                self.validate_epoch(self.start_epoch, self.save)
+                self.validate_epoch(self.start_epoch-1, self.save)
         else:
             self.logger.warning("no checkpoint assigned!") 
 
