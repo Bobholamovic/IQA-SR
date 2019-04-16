@@ -164,17 +164,13 @@ class SRTrainer(Trainer):
     def __init__(self, settings):
         super(SRTrainer, self).__init__(settings)
         self.scale = settings.scale
-        if hasattr(settings, 'cfg'):
-            cfg = settings.cfg
-            self.criterion = ComLoss(
-                cfg['IQA_MODEL'], 
-                cfg['WEIGHTS'], 
-                cfg['FEAT_NAMES'], 
-                patch_size=cfg['PATCH_SIZE'], 
-                pixel_criterion=cfg['CRITERION']
-            )
-        else:
-            self.criterion = ComLoss(None, None, None)
+        self.criterion = ComLoss(
+            settings.iqa_model_path, 
+            settings.__dict__.get('weights'), 
+            settings.__dict__.get('feat_names'), 
+            settings.iqa_patch_size, 
+            settings.criterion
+        )
 
         self.model = SRResNet(scale=self.scale)
 
@@ -259,8 +255,8 @@ class SRTrainer(Trainer):
                 ssim.update(sr, hr)
                         
                 desc = "[{}/{}]"\
-                        "Loss {loss.val:.4f} ({loss.avg:.4f})"\
-                        "PSNR: {psnr.val:.4f} ({psnr.avg:.4f})"\
+                        "Loss {loss.val:.4f} ({loss.avg:.4f}) "\
+                        "PSNR: {psnr.val:.4f} ({psnr.avg:.4f}) "\
                         "SSIM: {ssim.val:.4f} ({ssim.avg:.4f})"\
                         .format(i+1, len_val, loss=losses,
                                     psnr=psnr, ssim=ssim)

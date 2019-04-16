@@ -16,7 +16,6 @@ def scale_to_N_mult(x, N):
 def default_loader(pth):
     arr = np.array(io.imread(pth))
     assert arr.ndim == 3 and arr.shape[-1] == 3
-    arr = scale_to_N_mult(arr, 8)
     return arr
 
 def to_tensor(x):

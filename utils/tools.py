@@ -92,4 +92,4 @@ class OutPathGetter:
     def add_suffix(self, path, underline=False):
         pos = path.rfind('.')
         assert pos > -1
-        return path[:pos] + ('_' if underline else '') + self._suffix + path[pos:]
+        return path[:pos] + ('_' if underline and self._suffix else '') + self._suffix + path[pos:]

@@ -2,7 +2,10 @@
 import argparse
 import os
 import yaml
+import shutil
 from time import localtime
+from os.path import join, basename, exists
+from pdb import set_trace as db
 
 from core.trainer import SRTrainer
 from utils.tools import OutPathGetter
@@ -16,17 +19,26 @@ warnings.filterwarnings('ignore')
 def read_config(config_path):
     f = open(config_path, 'r')
     cfg = yaml.load(f.read())
+    if cfg is None:
+        cfg = {}
     return cfg
 
 
-def parse_config(cfg):
-    if cfg['FEATS']:
-        feat_names, weights = zip(*(tuple(*f.items()) for f in cfg['FEATS']))
+def parse_config(cfg_name, cfg):
+    # Parse feats
+    if cfg.get('feats'):
+        feat_names, weights = zip(*(tuple(*f.items()) for f in cfg['feats']))
+        del cfg['feats']
+        cfg = {**cfg, 'feat_names': feat_names, 'weights': weights}
+
+    # Parse the name of config file
+    sp = cfg_name.split('.')[0].split('_')
+    if len(sp) >= 2:
+        cfg['tag'] = sp[1]
+        cfg['suffix'] = '_'.join(sp[1:])
     else:
-        feat_names, weights = None, None
-    del cfg['FEATS']
-    cfg = {**cfg, 'FEAT_NAMES': feat_names, 'WEIGHTS': weights}
-    
+        cfg['tag'] = cfg['suffix'] = '_'.join([str(k)+'-'+str(v) for k,v in sorted(cfg.items())])
+
     return cfg
 
 
@@ -59,26 +71,27 @@ def parse_args():
     parser.add_argument('--save-off', action='store_true')
     parser.add_argument('-s', '--scale', type=int, default=4)
     parser.add_argument('--log-off', action='store_true')
+    parser.add_argument('--iqa-patch-size', type=int, default=32)
+    parser.add_argument('--criterion', type=str, default='MAE')
+    parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_n8_p32_d3.pkl')
 
     args = parser.parse_args()
 
-    if args.exp_config:
-        cfg = read_config(args.exp_config)
-        cfg = parse_config(cfg)
-        #args.__dict__.update(dict(cfg))
-        args.cfg = cfg
+    cfg_name = basename(args.exp_config)
 
-        # Parse the name of config file
-        sp = args.exp_config.split('.')[0].split('_')
-        if len(sp) > 2:
-            args.tag = sp[1]
-            args.suffix = '_'.join(sp[1:])
-        else:
-            args.tag = args.suffix = sp[1]
+    if exists(args.exp_config):
+        cfg = read_config(args.exp_config)
+        cfg = parse_config(cfg_name, cfg)
+        args.__dict__.update(cfg)
 
     args.global_path = OutPathGetter(
                 root=os.path.join(args.out_dir, args.tag), 
                 suffix=args.suffix)
+
+    cfg_path = os.path.join(args.global_path.root, cfg_name)
+    if exists(args.exp_config) and not exists(cfg_path):
+        # Make a copy of the config file
+        shutil.copy(args.exp_config, cfg_path)
 
     return args
 

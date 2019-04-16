@@ -2,7 +2,7 @@ import torch
 import torch.utils.data
 import numpy as np
 
-from .common import default_loader, to_tensor, to_array
+from .common import default_loader, to_tensor, to_array, scale_to_N_mult
 from .augmentation import Scale
 
 from os.path import join, basename, exists
@@ -55,7 +55,8 @@ class SRDataset(torch.utils.data.Dataset):
 
     def _fetch_hr(self, index):
         data_path = join(self.data_dir, self.image_list[index])
-        return default_loader(data_path)   
+        data = default_loader(data_path)   
+        return scale_to_N_mult(data, self.scale)
 
     def normalize(self, x):
         # For inputs

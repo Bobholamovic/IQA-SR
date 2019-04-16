@@ -54,16 +54,19 @@ class IQALoss(nn.Module):
 
 
 class ComLoss(nn.Module):
-    def __init__(self, model_path, weights, feat_names, patch_size=32, pixel_criterion='MAE'):
+    def __init__(self, model_path, weights, feat_names, patch_size=32, criterion='MAE'):
         super(ComLoss, self).__init__()
 
-        if pixel_criterion == 'MAE':
-            self.criterion = F.l1_loss
-        elif pixel_criterion == 'MSE':
-            self.criterion = F.mse_loss
+        if criterion == 'MAE':
+            self._pixel_criterion = F.l1_loss
+        elif criterion == 'MSE':
+            self._pixel_criterion = F.mse_loss
+        elif criterion == 'IQA':
+            self._pixel_criterion = self._none
+            assert weights is not None
         else:
-            if hasattr(pixel_criterion, '__call__'):
-                self.criterion = pixel_criterion 
+            if hasattr(criterion, '__call__'):
+                self.criterion = criterion
             raise ValueError('invalid criterion')
             
         self.weights = weights
@@ -72,13 +75,13 @@ class ComLoss(nn.Module):
             self.weights = torch.FloatTensor(weights)
             if torch.cuda.is_available(): self.weights = self.weights.cuda()
             self.iqa_loss = IQALoss(model_path, patch_size, feat_names)
+            self._feat_criterion = self._calc_feat_loss
+        else:
+            self._feat_criterion = self._none
 
     def forward(self, output, target):
-        pixel_loss = self.criterion(output, target)
-        if self.weights is not None and self.training:
-            feat_loss = torch.sum(self.weights*self.iqa_loss(output, target))
-        else:
-            feat_loss = torch.tensor(0.0).type_as(pixel_loss)
+        pixel_loss = self._pixel_criterion(output, target)
+        feat_loss = self._feat_criterion(output, target)
 
         total_loss = pixel_loss + feat_loss
 
@@ -87,4 +90,11 @@ class ComLoss(nn.Module):
         else:
             return total_loss
 
+    def _calc_feat_loss(self, output, target):
+        if self.training:
+            return torch.sum(self.weights*self.iqa_loss(output, target))
+        else:
+            return self._none(output, target)
 
+    def _none(self, output, target):
+        return torch.tensor(0.0).type_as(output)
