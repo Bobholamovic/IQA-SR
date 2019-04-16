@@ -74,6 +74,7 @@ def parse_args():
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
     parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_n8_p32_d3.pkl')
+    parser.add_argument('--trace-freq', type=int, default=50)
 
     args = parser.parse_args()
 

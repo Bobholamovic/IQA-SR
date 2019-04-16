@@ -67,14 +67,7 @@ class Trainer:
             
             self.logger.show_nl("Epoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
             # Train for one epoch
-            self.train_epoch()
-            
-            history_path = self.path('weight', 'checkpoint_{:03d}.pkl'.format(
-                                    epoch+1
-                                    ), underline=True)
-            torch.save({'epoch': epoch+1, 
-                        'state_dict': self.model.state_dict(), 
-                        'max_acc': max_acc}, history_path)            
+            self.train_epoch() 
 
             # Evaluate the model on validation set
             self.logger.show_nl("Validate")
@@ -86,12 +79,16 @@ class Trainer:
                 best_epoch = epoch
             self.logger.show_nl("Current: {:.6f}({:03d})\tBest: {:.6f}({:03d})\t".format(
                                 acc, epoch, max_acc, best_epoch))
-
-            self.save_checkpoint({
-                'epoch': epoch+1,
-                'state_dict': self.model.state_dict(),
-                'max_acc': max_acc,
-            }, is_best, file_name='checkpoint_latest.pkl')
+                                
+            history_path = self.path('weight', 'checkpoint_{:03d}.pkl'.format(
+                                    epoch+1
+                                    ), underline=True)      
+            save_dict = {'epoch': epoch+1, 
+                        'state_dict': self.model.state_dict(), 
+                        'max_acc': max_acc}
+            if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
+                torch.save(save_dict, history_path)     
+            self._save_checkpoint(save_dict, is_best, file_name='checkpoint_latest.pkl')
     
     def validate(self):
         if self.checkpoint: 
@@ -153,7 +150,7 @@ class Trainer:
             self.logger.error("=> no checkpoint found at '{}'".format(self.checkpoint))
             return False
         
-    def save_checkpoint(self, state, is_best, file_name='checkpoint.pkl'):
+    def _save_checkpoint(self, state, is_best, file_name='checkpoint.pkl'):
         file_name = self.path('weight', file_name, underline=True)
         torch.save(state, file_name)
         if is_best:
