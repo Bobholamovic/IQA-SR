@@ -14,7 +14,7 @@ def scale_to_N_mult(x, N):
     h, w = x.shape[:2]
     nh = _get_last_mul_N(h, N)
     nw = _get_last_mul_N(w, N)
-    return resize(x, (nh, nw))
+    return resize(x, (nh, nw), no_blur=True)
 
 def default_loader(pth):
     arr = np.array(io.imread(pth))
@@ -27,8 +27,8 @@ def to_tensor(x):
 def to_array(x):
     return np.moveaxis(np.asarray(x), -3, -1)
 
-def resize(x, size):
-    blur = (x.shape[:2] < size) and GAUSSIAN_BLUR
+def resize(x, size, no_blur=False):
+    blur = GAUSSIAN_BLUR and not no_blur
     return transform.resize(
         x.astype(np.float), 
         size,
