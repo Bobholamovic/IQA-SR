@@ -139,7 +139,7 @@ class Trainer:
             self.model.load_state_dict(state_dict)
 
             self.logger.show("=> loaded checkpoint '{}' (epoch {})"
-                  .format(self.checkpoint, self.start_epoch))
+                  .format(self.checkpoint, self.start_epoch-1))
             return True
         else:
             self.logger.error("=> no checkpoint found at '{}'".format(self.checkpoint))

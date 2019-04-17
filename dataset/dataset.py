@@ -47,10 +47,12 @@ class SRDataset(torch.utils.data.Dataset):
     def _read_lists(self):   
         assert isdir(self.list_dir)
         list_path = join(self.list_dir, '{}_list.txt'.format(self.subset))  
-        if exists(list_path):   
+        if exists(list_path):  
+            self._fetch_hr = self._fetch_hr_from_list
             self.image_list = self._read_single_list(list_path)
         else:
             # Handle a directory
+            self._fetch_hr = self._fetch_hr_from_folder
             from glob import glob
             from constants import IMAGE_POSTFIXES as IPF
             file_list = glob(join(self.list_dir, '*'))
@@ -66,9 +68,13 @@ class SRDataset(torch.utils.data.Dataset):
     def _make_lr(self, hr):
         return self.scaler(hr)
 
-    def _fetch_hr(self, index):
+    def _fetch_hr_from_list(self, index):
         data_path = join(self.data_dir, self.image_list[index])
         data = default_loader(data_path)   
+        return scale_to_N_mult(data, self.scale)
+
+    def _fetch_hr_from_folder(self, index):
+        data = default_loader(self.image_list[index])
         return scale_to_N_mult(data, self.scale)
 
     def normalize(self, x):

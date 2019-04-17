@@ -139,6 +139,7 @@ class Crop(Transform):
         elif self.bounds == 'r':
             return x[:,w//2:]
         elif len(self.bounds) == 2:
+            assert self.crop_size < (h, w)
             cw, ch = self.crop_size
             cx, cy = int((w-cw)*self.bounds[0]), int((h-ch)*self.bounds[1])
             return x[cy:cy+ch, cx:cx+cw]
