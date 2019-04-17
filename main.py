@@ -45,12 +45,13 @@ def parse_config(cfg_name, cfg):
 def parse_args():
     # Training settings
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('cmd', choices=['train', 'test', 'val'])
+    parser.add_argument('cmd', choices=['train', 'val'])
     parser.add_argument('-d', '--data-dir', default='/media/gdf/0005898C000F299F/FDisk/gMAD/pristine_images/')
     parser.add_argument('-l', '--list-dir', default='/media/gdf/0005898C000F299F/FDisk/gMAD/pristine_images/SR/')
-    parser.add_argument('-o', '--out-dir', default='./test/')
+    parser.add_argument('-o', '--out-dir', default='')
     parser.add_argument('-p', '--patch-size', type=int, default=256, metavar='P', 
                         help='patch size (default: 64)')
+    parser.add_argument('--exp-dir', default='./exps/')
     parser.add_argument('--step', type=int, default=200)
     parser.add_argument('--batch-size', type=int, default=32, metavar='B',
                         help='input batch size for training (default: 32)')
@@ -68,9 +69,10 @@ def parse_args():
     parser.add_argument('--suffix', type=str, default='')
     parser.add_argument('--exp-config', type=str, default='')
     parser.add_argument('--subset', type=str, default='test')
-    parser.add_argument('--save-off', action='store_true')
     parser.add_argument('-s', '--scale', type=int, default=4)
+    parser.add_argument('--save-off', action='store_true')
     parser.add_argument('--log-off', action='store_true')
+    parser.add_argument('--suffix-off', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
     parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_n8_p32_d3.pkl')
@@ -86,7 +88,7 @@ def parse_args():
         args.__dict__.update(cfg)
 
     args.global_path = OutPathGetter(
-                root=os.path.join(args.out_dir, args.tag), 
+                root=os.path.join(args.exp_dir, args.tag), 
                 suffix=args.suffix)
 
     cfg_path = os.path.join(args.global_path.root, cfg_name)

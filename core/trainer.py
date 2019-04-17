@@ -11,13 +11,16 @@ from dataset.augmentation import Compose, Crop, Flip
 from utils.metric import PSNR, SSIM, Metric
 from utils.loss import ComLoss
 from utils.tools import Logger
-from models.srnet import SRResNet
+from models.sr_models.factory import make_model
+
+from constants import ARCH
 
 
 class Trainer:
     def __init__(self, settings):
         super(Trainer, self).__init__()
         self.settings = settings
+        self.phase = settings.cmd
         self.batch_size = settings.batch_size
         self.num_workers = settings.workers
         self.data_dir = settings.data_dir
@@ -35,7 +38,7 @@ class Trainer:
         self.logger = Logger(
             scrn=True, 
             log_dir=log_dir, 
-            phase=settings.cmd
+            phase=self.phase
         )
 
         for k,v in settings.__dict__.items(): 
@@ -67,7 +70,7 @@ class Trainer:
             
             self.logger.show_nl("Epoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
             # Train for one epoch
-            self.train_epoch() 
+            self.train_epoch()          
 
             # Evaluate the model on validation set
             self.logger.show_nl("Validate")
@@ -79,16 +82,8 @@ class Trainer:
                 best_epoch = epoch
             self.logger.show_nl("Current: {:.6f}({:03d})\tBest: {:.6f}({:03d})\t".format(
                                 acc, epoch, max_acc, best_epoch))
-                                
-            history_path = self.path('weight', 'checkpoint_{:03d}.pkl'.format(
-                                    epoch+1
-                                    ), underline=True)      
-            save_dict = {'epoch': epoch+1, 
-                        'state_dict': self.model.state_dict(), 
-                        'max_acc': max_acc}
-            if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
-                torch.save(save_dict, history_path)     
-            self._save_checkpoint(save_dict, is_best, file_name='checkpoint_latest.pkl')
+
+            self._save_checkpoint(self.model.state_dict(), max_acc, epoch, is_best)
     
     def validate(self):
         if self.checkpoint: 
@@ -150,11 +145,23 @@ class Trainer:
             self.logger.error("=> no checkpoint found at '{}'".format(self.checkpoint))
             return False
         
-    def _save_checkpoint(self, state, is_best, file_name='checkpoint.pkl'):
-        file_name = self.path('weight', file_name, underline=True)
-        torch.save(state, file_name)
+    def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
+        state = {
+            'epoch': epoch+1, 
+            'state_dict': state_dict, 
+            'max_acc': max_acc
+        } 
+        # Save history
+        history_path = self.path('weight', 'checkpoint_{:03d}.pkl'.format(
+                                epoch+1
+                                ), underline=True)
+        if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
+            torch.save(state, history_path) 
+        # Save latest
+        latest_path = self.path('weight', 'checkpoint_latest.pkl', underline=True)
+        torch.save(state, latest_path)
         if is_best:
-            shutil.copyfile(file_name, self.path('weight', 'model_best.pkl', underline=True))
+            shutil.copyfile(latest_path, self.path('weight', 'model_best.pkl', underline=True))
         
     
 class SRTrainer(Trainer):
@@ -169,17 +176,25 @@ class SRTrainer(Trainer):
             settings.criterion
         )
 
-        self.model = SRResNet(scale=self.scale)
+        model = make_model(ARCH)
+        if not model:
+            raise ValueError('{} is not supported'.format(ARCH))
+        opts = {
+            'scale': self.scale
+        }
+        self.model = model(**opts)
 
-        self.train_loader = torch.utils.data.DataLoader(
-            WaterlooDataset(
-                self.data_dir, 'train', self.scale, 
-                list_dir=self.list_dir, 
-                transform=Compose(Crop(settings.patch_size), Flip())), 
-            batch_size=self.batch_size, shuffle=True, 
-            num_workers=self.num_workers, 
-            pin_memory=True, drop_last=True
-            )
+        if self.phase == 'train':
+            self.train_loader = torch.utils.data.DataLoader(
+                WaterlooDataset(
+                    self.data_dir, 'train', self.scale, 
+                    list_dir=self.list_dir, 
+                    transform=Compose(Crop(settings.patch_size), Flip())), 
+                batch_size=self.batch_size, shuffle=True, 
+                num_workers=self.num_workers, 
+                pin_memory=True, drop_last=True
+                )
+
         self.val_loader = WaterlooDataset(
             self.data_dir, 'val', 
             self.scale, 
@@ -267,6 +282,15 @@ class SRTrainer(Trainer):
         return psnr.avg
         
     def save_image(self, file_name, image, epoch):
-        file_path = os.path.join('epoch_{}/'.format(epoch), file_name)
-        out_path = self.path('out', file_path, auto_make=True, underline=True)
+        file_path = os.path.join(
+            'epoch_{}/'.format(epoch), 
+            self.settings.out_dir, 
+            file_name
+        )
+        out_path = self.path(
+            'out', file_path, 
+            suffix=not self.settings.suffix_off, 
+            auto_make=True, 
+            underline=True
+        )
         return io.imsave(out_path, image)

@@ -2,6 +2,9 @@ import numpy as np
 from skimage import transform, io
 import torch
 
+from constants import INTERP_ORDER, GAUSSIAN_BLUR
+
+
 def _get_last_mul_N(num, N):
     while(num % N != 0):
         num -= 1
@@ -22,9 +25,14 @@ def to_tensor(x):
     return torch.from_numpy(np.moveaxis(x, -1, -3))
 
 def to_array(x):
-    return np.moveaxis(np.array(x), -3, -1)
+    return np.moveaxis(np.asarray(x), -3, -1)
 
 def resize(x, size):
-    # Bilinear interpolation
-    return transform.resize(x.astype(np.float), size, order=1).astype(x.dtype)
+    blur = (x.shape[:2] < size) and GAUSSIAN_BLUR
+    return transform.resize(
+        x.astype(np.float), 
+        size,
+        order=INTERP_ORDER, 
+        anti_aliasing=blur
+    ).astype(x.dtype)
 

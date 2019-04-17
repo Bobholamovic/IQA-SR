@@ -93,3 +93,4 @@ class OutPathGetter:
         pos = path.rfind('.')
         assert pos > -1
         return path[:pos] + ('_' if underline and self._suffix else '') + self._suffix + path[pos:]
+
