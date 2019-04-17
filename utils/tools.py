@@ -48,11 +48,11 @@ class Logger:
 
 
 class OutPathGetter:
-    def __init__(self, root='', log='logs', out='outs', weight='weights', suffix=''):
+    def __init__(self, root='', log='logs', out='outs', weight='weights', suffix='', **subs):
         super().__init__()
         self._root = root
         self._suffix = suffix
-        self._sub_dirs = dict(log=log, out=out, weight=weight)
+        self._sub_dirs = dict(log=log, out=out, weight=weight, **subs)
 
         self.build_dir_tree()
 

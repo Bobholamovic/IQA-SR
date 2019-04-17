@@ -22,7 +22,7 @@ class Trainer:
         self.settings = settings
         self.phase = settings.cmd
         self.batch_size = settings.batch_size
-        self.num_workers = settings.workers
+        self.num_workers = settings.num_workers
         self.data_dir = settings.data_dir
         self.list_dir = settings.list_dir
         self.checkpoint = settings.resume

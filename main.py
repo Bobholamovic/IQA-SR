@@ -26,7 +26,7 @@ def read_config(config_path):
 
 def parse_config(cfg_name, cfg):
     # Parse feats
-    if cfg.get('feats'):
+    if cfg.__contains__('feats'):
         feat_names, weights = zip(*(tuple(*f.items()) for f in cfg['feats']))
         del cfg['feats']
         cfg = {**cfg, 'feat_names': feat_names, 'weights': weights}
@@ -34,11 +34,13 @@ def parse_config(cfg_name, cfg):
     # Parse the name of config file
     sp = cfg_name.split('.')[0].split('_')
     if len(sp) >= 2:
-        cfg['tag'] = sp[1]
-        cfg['suffix'] = '_'.join(sp[1:])
+        cfg.setdefault('tag', sp[1])
+        cfg.setdefault('suffix', '_'.join(sp[1:]))
     else:
-        cfg['tag'] = cfg['suffix'] = '_'.join([str(k)+'-'+str(v) for k,v in sorted(cfg.items())])
-
+        new_str = '_'.join([str(k)+'-'+str(v) for k,v in sorted(cfg.items())])
+        cfg.setdefault('tag', new_str)
+        cfg.setdefault('suffix', new_str)
+    
     return cfg
 
 
@@ -60,11 +62,11 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
                         help='learning rate (default: 1e-4)')
     parser.add_argument('--lr-mode', type=str, default='const')
-    parser.add_argument('--weight-decay', default=5e-6, type=float,
+    parser.add_argument('--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint')
-    parser.add_argument('--workers', type=int, default=16)
+    parser.add_argument('--num-workers', type=int, default=8)
     parser.add_argument('--tag', type=str, default='')
     parser.add_argument('--suffix', type=str, default='')
     parser.add_argument('--exp-config', type=str, default='')
