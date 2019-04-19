@@ -11,7 +11,7 @@ from dataset.augmentation import Compose, Crop, Flip
 from utils.metric import PSNR, SSIM, Metric
 from utils.loss import ComLoss
 from utils.tools import Logger
-from models.sr_models.factory import make_model
+from models.sr_models.factory import build_model
 
 from constants import ARCH
 
@@ -176,13 +176,7 @@ class SRTrainer(Trainer):
             settings.criterion
         )
 
-        model = make_model(ARCH)
-        if not model:
-            raise ValueError('{} is not supported'.format(ARCH))
-        opts = {
-            'scale': self.scale
-        }
-        self.model = model(**opts)
+        self.model = build_model(ARCH, scale=self.scale)
 
         if self.phase == 'train':
             self.train_loader = torch.utils.data.DataLoader(
