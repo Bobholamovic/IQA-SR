@@ -19,9 +19,8 @@ warnings.filterwarnings('ignore')
 def read_config(config_path):
     f = open(config_path, 'r')
     cfg = yaml.load(f.read())
-    if cfg is None:
-        cfg = {}
-    return cfg
+    f.close()
+    return cfg or {}
 
 
 def parse_config(cfg_name, cfg):
