@@ -31,7 +31,7 @@ class SRUpsample(nn.Module):
 
 
 class SRResNet(nn.Module):
-    def __init__(self, scale=4, colors=3, blocks=5, channels=64):
+    def __init__(self, scale=4, colors=3, blocks=16, channels=64):
         super().__init__()
         self.head = BasicConv(colors, channels, 9, bn=False, act=True)
 
@@ -49,7 +49,7 @@ class SRResNet(nn.Module):
             raise ValueError('the upsampling rate has to be 2, 3, or 4')
         self.upsample = nn.Sequential(*up_modules)
 
-        self.out = Conv3x3(channels, colors)
+        self.out = BasicConv(channels, colors, 9)
 
         self._init_weights()
 
