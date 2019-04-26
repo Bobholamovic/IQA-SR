@@ -139,7 +139,7 @@ class Trainer:
             self.model.load_state_dict(state_dict)
 
             self.logger.show("=> loaded checkpoint '{}' (epoch {})"
-                  .format(self.checkpoint, self.start_epoch-1))
+                  .format(self.checkpoint, checkpoint['epoch']-1))
             return True
         else:
             self.logger.error("=> no checkpoint found at '{}'".format(self.checkpoint))
@@ -244,7 +244,8 @@ class SRTrainer(Trainer):
 
         with torch.no_grad():
             for i, (name, lr, hr) in pb:
-                if i >= 32: 
+                if self.phase == 'train' and i >= 32: 
+                    # Do not validate all images on training phase
                     pb.close()
                     self.logger.warning("validation ends early")
                     break
