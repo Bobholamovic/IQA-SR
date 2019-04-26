@@ -113,37 +113,40 @@ class Trainer:
         return lr
 
     def _resume_from_checkpoint(self):
-        if os.path.isfile(self.checkpoint):
-            self.logger.show("=> loading checkpoint '{}'".format(
-                            self.checkpoint))
-            checkpoint = torch.load(self.checkpoint)
-
-            state_dict = self.model.state_dict()
-            ckp_dict = checkpoint['state_dict']
-            update_dict = {k:v for k,v in ckp_dict.items() 
-                if k in state_dict and state_dict[k].shape == v.shape}
-            
-            num_to_update = len(update_dict)
-            if len(state_dict) != num_to_update:
-                self.logger.warning("warning: trying to load an unmatched checkpoint")
-                if num_to_update == 0:
-                    self.logger.error("=> no parameter is to be loaded")
-                    return False
-                else:
-                    self.logger.warning("=> {} params are to be loaded".format(num_to_update))
-            else:
-                self.start_epoch = checkpoint['epoch']
-                self._init_max_acc = checkpoint['max_acc']
-            
-            state_dict.update(update_dict)
-            self.model.load_state_dict(state_dict)
-
-            self.logger.show("=> loaded checkpoint '{}' (epoch {})"
-                  .format(self.checkpoint, checkpoint['epoch']-1))
-            return True
-        else:
+        if not os.path.isfile(self.checkpoint):
             self.logger.error("=> no checkpoint found at '{}'".format(self.checkpoint))
             return False
+
+        self.logger.show("=> loading checkpoint '{}'".format(
+                        self.checkpoint))
+        checkpoint = torch.load(self.checkpoint)
+
+        state_dict = self.model.state_dict()
+        ckp_dict = checkpoint['state_dict']
+        update_dict = {k:v for k,v in ckp_dict.items() 
+            if k in state_dict and state_dict[k].shape == v.shape}
+        
+        num_to_update = len(update_dict)
+        if len(state_dict) != num_to_update:
+            if self.phase == 'val':
+                self.logger.error('=> mismatched checkpoint for validation')
+                return False
+            self.logger.warning("warning: trying to load an mismatched checkpoint")
+            if num_to_update == 0:
+                self.logger.error("=> no parameter is to be loaded")
+                return False
+            else:
+                self.logger.warning("=> {} params are to be loaded".format(num_to_update))
+        else:
+            self.start_epoch = checkpoint['epoch']
+            self._init_max_acc = checkpoint['max_acc']
+        
+        state_dict.update(update_dict)
+        self.model.load_state_dict(state_dict)
+
+        self.logger.show("=> loaded checkpoint '{}' (epoch {})"
+                .format(self.checkpoint, checkpoint['epoch']-1))
+        return True
         
     def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
         state = {
