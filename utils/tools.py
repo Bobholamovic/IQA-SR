@@ -11,6 +11,7 @@ class Logger:
     def __init__(self, scrn=True, log_dir='', phase=''):
         super().__init__()
         self._logger = logging.getLogger('logger_{}'.format(Logger._count))
+        Logger._count += 1
         self._logger.setLevel(logging.DEBUG)
 
         if scrn:

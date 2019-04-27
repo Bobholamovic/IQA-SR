@@ -86,6 +86,7 @@ def parse_args():
     if exists(args.exp_config):
         cfg = read_config(args.exp_config)
         cfg = parse_config(cfg_name, cfg)
+        # Settings from cfg file overwrite those in args
         args.__dict__.update(cfg)
 
     args.global_path = OutPathGetter(

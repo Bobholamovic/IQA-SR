@@ -48,8 +48,6 @@ class IQALoss(nn.Module):
         return patchs
 
     def _renormalize(self, img):
-        # The output range of QGCNN exactly fits the input of IQANet 
-        # thus no remapping is done here
         pass
 
 

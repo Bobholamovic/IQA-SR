@@ -13,7 +13,6 @@ def register(module, name, features):
     return module
 
 def register_du(module, name, features):
-    ## Thread-unsafe
     _forward = module.forward
     def hooked_forward(*args, __buffer=[], **kwargs):
         out = _forward(*args, **kwargs)
@@ -95,9 +94,7 @@ class IQANet(nn.Module):
 
         # Fusion layers
         self.cl1 = SingleConv(384, 128)
-        # self.cl2 = SingleConv(128, 64)
         self.cl2 = nn.Conv2d(128, 64, kernel_size=2)
-        # Wulala stop here
 
         # Regression layers
         self.rl1 = nn.Linear(64, 32)
@@ -107,9 +104,7 @@ class IQANet(nn.Module):
             self.wl1 = nn.Linear(64, 32)
             self.wl2 = nn.Linear(32, 1)
 
-        # Utilities?
         self.dropout = nn.Dropout(0.5)
-        # self.pool = nn.MaxPool2d(kernel_size=4, stride=(4,4), padding=(0,0))
 
         self._initialize_weights()
 
@@ -151,9 +146,6 @@ class IQANet(nn.Module):
 
         flatten = f_com.view(f_com.shape[0], -1)
 
-        # y = self.dropout(flatten)
-        # y = self.rl1(y)
-        # y = self.dropout(y)
         y = self.rl1(flatten)
         y = self.rl2(y)
 
