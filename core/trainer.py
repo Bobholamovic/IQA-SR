@@ -4,6 +4,7 @@ import os
 import torch
 import torch.backends.cudnn as cudnn
 
+from pdb import set_trace as db
 from tqdm import tqdm
 from skimage import io
 from dataset.dataset import WaterlooDataset
@@ -130,7 +131,7 @@ class Trainer:
         num_to_update = len(update_dict)
         if len(state_dict) != num_to_update:
             if self.phase == 'val':
-                self.logger.error('=> mismatched checkpoint for validation')
+                self.logger.error("=> mismatched checkpoint for validation")
                 return False
             self.logger.warning("warning: trying to load an mismatched checkpoint")
             if num_to_update == 0:
@@ -228,7 +229,7 @@ class SRTrainer(Trainer):
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            
+
             desc = "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
                     "PL {pixel.val:.4f} ({pixel.avg:.4f}) " \
                     "FL {feat.val:.6f} ({feat.avg:.6f})"\
@@ -243,6 +244,7 @@ class SRTrainer(Trainer):
         psnr = ShavedPSNR(self.scale)
         interp = ShavedPSNR(self.scale) # For simple upsampling
         len_val = len(self.val_loader)
+        to_image = self.val_loader.tensor_to_image
         pb = tqdm(enumerate(self.val_loader))
 
         self.model.eval()
@@ -261,9 +263,9 @@ class SRTrainer(Trainer):
 
                 losses.update(sr, hr)
 
-                lr = self.val_loader.tensor_to_image(lr.squeeze(0))
-                sr = self.val_loader.tensor_to_image(sr.squeeze(0))
-                hr = self.val_loader.tensor_to_image(hr.squeeze(0))
+                lr = to_image(lr.squeeze(0), 'lr')
+                sr = to_image(sr.squeeze(0))
+                hr = to_image(hr.squeeze(0))
 
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)
@@ -290,14 +292,14 @@ class SRTrainer(Trainer):
                             )
                 
                 if store:
-                    # lr_name = self.path_ctrl.add_suffix(name, suffix='lr', underline=True)
+                    lr_name = self.path_ctrl.add_suffix(name, suffix='lr', underline=True)
                     # int_name = self.path_ctrl.add_suffix(name, suffix='int', underline=True)
-                    # hr_name = self.path_ctrl.add_suffix(name, suffix='hr', underline=True)
+                    hr_name = self.path_ctrl.add_suffix(name, suffix='hr', underline=True)
                     sr_name = self.path_ctrl.add_suffix(name, suffix='sr', underline=True)
 
-                    # self.save_image(lr_name, lr, epoch)
+                    self.save_image(lr_name, lr, epoch)
                     # self.save_image(int_name, lr_int, epoch)
-                    # self.save_image(hr_name, hr, epoch)
+                    self.save_image(hr_name, hr, epoch)
                     self.save_image(sr_name, sr, epoch)
 
         return psnr.avg

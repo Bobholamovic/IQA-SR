@@ -23,6 +23,9 @@ def default_loader(pth):
 def to_tensor(x):
     return torch.from_numpy(np.moveaxis(x, -1, -3))
 
+def to_float_tensor(x):
+    return to_tensor(x).float()
+
 def to_array(x):
     return np.moveaxis(np.asarray(x), -3, -1)
 
