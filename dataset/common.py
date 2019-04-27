@@ -1,23 +1,22 @@
 import numpy as np
-from skimage import transform, io
+from skimage import transform, io, color
 import torch
 
 from constants import INTERP_ORDER, GAUSSIAN_BLUR
 
 
-def _get_last_mul_N(num, N):
-    while(num % N != 0):
-        num -= 1
-    return num
-
-def scale_to_N_mult(x, N):
+def mod_crop(x, N):
     h, w = x.shape[:2]
-    nh = _get_last_mul_N(h, N)
-    nw = _get_last_mul_N(w, N)
-    return resize(x, (nh, nw), no_blur=True)
+    nh = h - h % N
+    nw = w - w % N
+    return x[:nh, :nw]
 
 def default_loader(pth):
     arr = np.array(io.imread(pth))
+    # Only for gray and RGB images
+    if arr.ndim == 2:
+        # Convert to RGB
+        arr = color.gray2rgb(arr)
     assert arr.ndim == 3 and arr.shape[-1] == 3
     return arr
 
@@ -35,4 +34,5 @@ def resize(x, size, no_blur=False):
         order=INTERP_ORDER, 
         anti_aliasing=blur
     ).astype(x.dtype)
+
 

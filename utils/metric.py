@@ -2,7 +2,8 @@ from skimage.measure import compare_psnr, compare_ssim
 from skimage import color
 import numpy as np
 
-class Metric:
+
+class Metric(object):
     def __init__(self, callback=None):
         super().__init__()
         self.callback = callback
@@ -25,7 +26,7 @@ class Metric:
 
     def update(self, *args, n=1):
         if not self._check_type(args):
-            raise TypeError('invalid type')
+            raise TypeError('unsupported type')
         self.val = self.compute(*args)
         self.sum += self.val * n
         self.count += n
@@ -78,6 +79,16 @@ class PSNR(FRIQA):
         return compare_psnr(true, test)
 
 
+class Shave(object):
+    def __init__(self, strip):
+        super().__init__()
+        self.strip = strip
+
+    def shave(self, x):
+        n = self.strip
+        return x[n:-n, n:-n]
+
+
 class SSIM(FRIQA):
     def __init__(self):
         super().__init__()
@@ -85,3 +96,20 @@ class SSIM(FRIQA):
     def _compute(self, true, test):
         return compare_ssim(true, test)
 
+
+class ShavedPSNR(Shave, PSNR):
+    def __init__(self, border):
+        super().__init__(border)
+
+    def _compute(self, true, test):
+        true, test = self.shave(true), self.shave(test)
+        return super()._compute(true, test)
+
+
+class ShavedSSIM(Shave, SSIM):
+    def __init__(self, border):
+        super().__init__(border)
+
+    def _compute(self, true, test):
+        true, test = self.shave(true), self.shave(test)
+        return super()._compute(true, test)

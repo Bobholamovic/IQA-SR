@@ -5,6 +5,7 @@ from time import localtime
 FORMAT_LONG = "[%(asctime)-15s %(filename)s:%(lineno)d %(funcName)s] %(message)s"
 FORMAT_SHORT = "%(message)s"
 
+
 class Logger:
     _count = 0
 
@@ -90,8 +91,9 @@ class OutPathGetter:
             self.make_dirs(os.path.dirname(path))
         return path
 
-    def add_suffix(self, path, underline=False):
+    def add_suffix(self, path, suffix='', underline=False):
         pos = path.rfind('.')
         assert pos > -1
-        return path[:pos] + ('_' if underline and self._suffix else '') + self._suffix + path[pos:]
+        _suffix = self._suffix if len(suffix) < 1 else suffix
+        return path[:pos] + ('_' if underline and _suffix else '') + _suffix + path[pos:]
 

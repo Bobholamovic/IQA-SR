@@ -3,7 +3,7 @@ import torch.utils.data
 import numpy as np
 import os
 
-from .common import default_loader, to_tensor, to_array, scale_to_N_mult
+from .common import default_loader, to_tensor, to_array, mod_crop
 from .augmentation import Scale
 
 from os.path import (join, basename, exists, isdir, dirname)
@@ -71,11 +71,11 @@ class SRDataset(torch.utils.data.Dataset):
     def _fetch_hr_from_list(self, index):
         data_path = join(self.data_dir, self.image_list[index])
         data = default_loader(data_path)   
-        return scale_to_N_mult(data, self.scale)
+        return mod_crop(data, self.scale)
 
     def _fetch_hr_from_folder(self, index):
         data = default_loader(self.image_list[index])
-        return scale_to_N_mult(data, self.scale)
+        return mod_crop(data, self.scale)
 
     def normalize(self, x):
         # For inputs of the net

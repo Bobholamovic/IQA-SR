@@ -8,7 +8,7 @@ from os.path import join, basename, exists
 from pdb import set_trace as db
 
 from core.trainer import SRTrainer
-from utils.tools import OutPathGetter
+from utils.misc import OutPathGetter
 
 ## Disturbing warnings from skimage
 ## Shut them off
@@ -93,9 +93,9 @@ def parse_args():
                 root=os.path.join(args.exp_dir, args.tag), 
                 suffix=args.suffix)
 
-    cfg_path = os.path.join(args.global_path.root, cfg_name)
-    if exists(args.exp_config) and not exists(cfg_path):
+    if exists(args.exp_config):
         # Make a copy of the config file
+        cfg_path = os.path.join(args.global_path.root, cfg_name)
         shutil.copy(args.exp_config, cfg_path)
 
     return args

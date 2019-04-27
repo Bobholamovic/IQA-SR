@@ -8,9 +8,10 @@ from tqdm import tqdm
 from skimage import io
 from dataset.dataset import WaterlooDataset
 from dataset.augmentation import Compose, Crop, Flip
-from utils.metric import PSNR, SSIM, Metric
+from dataset.common import resize
+from utils.metric import ShavedPSNR, ShavedSSIM, Metric
 from utils.loss import ComLoss
-from utils.tools import Logger
+from utils.misc import Logger
 from models.sr_models.factory import build_model
 
 from constants import ARCH
@@ -238,8 +239,9 @@ class SRTrainer(Trainer):
 
     def validate_epoch(self, epoch=0, store=False):
         losses = Metric(self.criterion)
-        ssim = SSIM()
-        psnr = PSNR()
+        ssim = ShavedSSIM(self.scale)
+        psnr = ShavedPSNR(self.scale)
+        interp = ShavedPSNR(self.scale) # For simple upsampling
         len_val = len(self.val_loader)
         pb = tqdm(enumerate(self.val_loader))
 
@@ -259,24 +261,44 @@ class SRTrainer(Trainer):
 
                 losses.update(sr, hr)
 
+                lr = self.val_loader.tensor_to_image(lr.squeeze(0))
                 sr = self.val_loader.tensor_to_image(sr.squeeze(0))
                 hr = self.val_loader.tensor_to_image(hr.squeeze(0))
 
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)
-                        
-                desc = "[{}/{}]"\
-                        "Loss {loss.val:.4f} ({loss.avg:.4f}) "\
-                        "PSNR: {psnr.val:.4f} ({psnr.avg:.4f}) "\
-                        "SSIM: {ssim.val:.4f} ({ssim.avg:.4f})"\
-                        .format(i+1, len_val, loss=losses,
-                                    psnr=psnr, ssim=ssim)
+                lr_int = resize(lr, (lr.shape[0]*self.scale, lr.shape[1]*self.scale))
+                interp.update(lr_int, hr)
 
-                pb.set_description(desc)
-                self.logger.dump(desc)
+                pb.set_description("[{}/{}]"
+                        "Loss {loss.val:.4f} ({loss.avg:.4f}) "
+                        "PSNR {psnr.val:.4f} ({psnr.avg:.4f}) "
+                        "SSIM {ssim.val:.4f} ({ssim.avg:.4f})"
+                        .format(i+1, len_val, loss=losses,
+                                    psnr=psnr, ssim=ssim))
+
+                self.logger.dump("[{}/{}]"
+                            "{} "
+                            "Loss {loss.val:.4f} ({loss.avg:.4f}) "
+                            "Interp {interp.val:.4f} ({interp.avg:.4f}) "
+                            "PSNR {psnr.val:.4f} ({psnr.avg:.4f}) "
+                            "SSIM {ssim.val:.4f} ({ssim.avg:.4f})"
+                            .format(
+                                i+1, len_val, name, 
+                                loss=losses, interp=interp, 
+                                psnr=psnr, ssim=ssim)
+                            )
                 
                 if store:
-                    self.save_image(name, sr, epoch)
+                    # lr_name = self.path_ctrl.add_suffix(name, suffix='lr', underline=True)
+                    # int_name = self.path_ctrl.add_suffix(name, suffix='int', underline=True)
+                    # hr_name = self.path_ctrl.add_suffix(name, suffix='hr', underline=True)
+                    sr_name = self.path_ctrl.add_suffix(name, suffix='sr', underline=True)
+
+                    # self.save_image(lr_name, lr, epoch)
+                    # self.save_image(int_name, lr_int, epoch)
+                    # self.save_image(hr_name, hr, epoch)
+                    self.save_image(sr_name, sr, epoch)
 
         return psnr.avg
         
