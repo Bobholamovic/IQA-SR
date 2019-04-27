@@ -12,6 +12,7 @@ class IQALoss(nn.Module):
         self.iqa_model = IQANet(weighted=False)
         self.iqa_model.load_state_dict(torch.load(path_to_model_weight)['state_dict'])
 
+        # Freeze the parameters
         for p in self.iqa_model.parameters():
             p.requires_grad = False
 

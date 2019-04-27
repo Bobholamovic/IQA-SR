@@ -211,6 +211,7 @@ class SRTrainer(Trainer):
         pb = tqdm(enumerate(self.train_loader))
         
         self.model.train()
+        # Make sure the criterion is also set to the correct state
         self.criterion.train()
 
         for i, (lr, hr) in pb:

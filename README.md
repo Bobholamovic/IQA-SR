@@ -3,6 +3,7 @@ Quality Guided Single Image Super-Resolution
 
 :zzz::zzz::zzz:
 
+TODO
+
 - [ ] test script for single lr image or a folder
-- [ ] multi-processing on saving the restored
 - [ ] dump error logs
