@@ -13,7 +13,7 @@ from utils.loss import ComLoss
 from utils.misc import Logger
 from models.sr_models.factory import build_model
 
-from constants import ARCH, DATASET
+from constants import (ARCH, DATASET, CKP_BEST, CKP_LATEST, CKP_COUNTED)
 
 
 class Trainer:
@@ -78,7 +78,7 @@ class Trainer:
             if is_best: 
                 max_acc = acc
                 best_epoch = epoch
-            self.logger.show_nl("Current: {:.6f}({:03d})\tBest: {:.6f}({:03d})\t".format(
+            self.logger.show_nl("Current: {:.6f} ({:03d})\tBest: {:.6f} ({:03d})\t".format(
                                 acc, epoch, max_acc, best_epoch))
 
             self._save_checkpoint(self.model.state_dict(), max_acc, epoch, is_best)
@@ -153,21 +153,21 @@ class Trainer:
             'max_acc': max_acc
         } 
         # Save history
-        history_path = self.path('weight', 'checkpoint_{:03d}_{}.pkl'.format(
-                                epoch+1, DATASET
+        history_path = self.path('weight', CKP_COUNTED.format(
+                                e=epoch+1, s=self.scale
                                 ), underline=True)
         if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
             torch.save(state, history_path) 
         # Save latest
         latest_path = self.path(
-            'weight', 'checkpoint_latest_{}.pkl'.format(DATASET), 
+            'weight', CKP_LATEST.format(s=self.scale), 
             underline=True
         )
         torch.save(state, latest_path)
         if is_best:
             shutil.copyfile(
                 latest_path, self.path(
-                    'weight', 'model_best_{}.pkl'.format(DATASET), 
+                    'weight', CKP_BEST.format(s=self.scale), 
                     underline=True
                 )
             )
