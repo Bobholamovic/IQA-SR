@@ -1,6 +1,8 @@
 import math
+from collections import namedtuple
 import torch
 import torch.nn as nn
+
 
 def register(module, name, features):
     _forward = module.forward
@@ -11,6 +13,7 @@ def register(module, name, features):
     # Monkey patch here
     module.forward = hooked_forward
     return module
+
 
 def register_du(module, name, features):
     _forward = module.forward
@@ -86,6 +89,7 @@ class IQANet(nn.Module):
         super(IQANet, self).__init__()
 
         self.weighted = weighted
+        self.features = dict()
 
         # Feature extraction layers
         self.fl1 = DoubleConv(3, 32)
@@ -108,18 +112,15 @@ class IQANet(nn.Module):
 
         self._initialize_weights()
 
-        self.features = dict()
+        self.ret_tuple = namedtuple('rets', ['score', 'features'])
 
-        # Register
-        # Would Module.register_forward_hook work better?
-        for n, m in self._modules.items():
-            # No recursion, just at 1st layer
-            if isinstance(m, nn.Module):
-                if n[:2] == 'fl':
-                    # Special for feature extraction layers
-                    register_du(m, n, self.features)
-                else:
-                    register(m, n, self.features)
+    def __setattr__(self, name, value):
+        if isinstance(value, nn.Module):
+            if name[:2] == 'fl':
+                register_du(value, name, self.features)
+            else:
+                register(value, name, self.features)
+        return super().__setattr__(name, value)
 
     def extract_feature(self, x):
         """ Forward function for feature extraction of each branch of the siamese net """
@@ -161,7 +162,7 @@ class IQANet(nn.Module):
             # Calculate average score for each image
             score = torch.mean(y.view(n_imgs, n_ptchs_per_img), dim=1)
 
-        return score.squeeze(), self.features
+        return self.ret_tuple(score.squeeze(), self.features)
 
     def _initialize_weights(self):
         for m in self.modules():

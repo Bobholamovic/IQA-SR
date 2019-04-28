@@ -47,8 +47,8 @@ def parse_args():
     # Training settings
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('cmd', choices=['train', 'val'])
-    parser.add_argument('-d', '--data-dir', default='/media/gdf/0005898C000F299F/FDisk/gMAD/pristine_images/')
-    parser.add_argument('-l', '--list-dir', default='/media/gdf/0005898C000F299F/FDisk/gMAD/pristine_images/SR/')
+    parser.add_argument('-d', '--data-dir', default='/home/gdf/Datasets/DIV2K/')
+    parser.add_argument('-l', '--list-dir', default='/home/gdf/Datasets/DIV2K/lists/X2/')
     parser.add_argument('-o', '--out-dir', default='')
     parser.add_argument('-p', '--patch-size', type=int, default=256, metavar='P', 
                         help='patch size (default: 64)')
@@ -78,6 +78,7 @@ def parse_args():
     parser.add_argument('--criterion', type=str, default='MAE')
     parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_n8_p32_d3.pkl')
     parser.add_argument('--trace-freq', type=int, default=50)
+    parser.add_argument('--reproduct', type=int, default=1)
 
     args = parser.parse_args()
 

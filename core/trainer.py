@@ -4,18 +4,16 @@ import os
 import torch
 import torch.backends.cudnn as cudnn
 
-from pdb import set_trace as db
 from tqdm import tqdm
 from skimage import io
-from dataset.dataset import WaterlooDataset
-from dataset.augmentation import Compose, Crop, Flip
-from dataset.common import resize
+from dataset.dataset import get_dataset
+from dataset.augmentation import Compose, MSCrop, Flip, Scale
 from utils.metric import ShavedPSNR, ShavedSSIM, Metric
 from utils.loss import ComLoss
 from utils.misc import Logger
 from models.sr_models.factory import build_model
 
-from constants import ARCH
+from constants import ARCH, DATASET
 
 
 class Trainer:
@@ -24,12 +22,10 @@ class Trainer:
         self.settings = settings
         self.phase = settings.cmd
         self.batch_size = settings.batch_size
-        self.num_workers = settings.num_workers
         self.data_dir = settings.data_dir
         self.list_dir = settings.list_dir
         self.checkpoint = settings.resume
         self.load_checkpoint = (len(self.checkpoint)>0)
-        self.patch_size = settings.patch_size
         self.num_epochs = settings.num_epochs
         self.lr = settings.lr
         self.save = not settings.save_off
@@ -62,7 +58,7 @@ class Trainer:
         
         if self.load_checkpoint: self._resume_from_checkpoint()
         max_acc = self._init_max_acc
-        best_epoch = self.start_epoch-1
+        best_epoch = max(self.start_epoch-1, 0)
 
         self.model.cuda()
         self.criterion.cuda()
@@ -157,22 +153,31 @@ class Trainer:
             'max_acc': max_acc
         } 
         # Save history
-        history_path = self.path('weight', 'checkpoint_{:03d}.pkl'.format(
-                                epoch+1
+        history_path = self.path('weight', 'checkpoint_{:03d}_{}.pkl'.format(
+                                epoch+1, DATASET
                                 ), underline=True)
         if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
             torch.save(state, history_path) 
         # Save latest
-        latest_path = self.path('weight', 'checkpoint_latest.pkl', underline=True)
+        latest_path = self.path(
+            'weight', 'checkpoint_latest_{}.pkl'.format(DATASET), 
+            underline=True
+        )
         torch.save(state, latest_path)
         if is_best:
-            shutil.copyfile(latest_path, self.path('weight', 'model_best.pkl', underline=True))
+            shutil.copyfile(
+                latest_path, self.path(
+                    'weight', 'model_best_{}.pkl'.format(DATASET), 
+                    underline=True
+                )
+            )
         
     
 class SRTrainer(Trainer):
     def __init__(self, settings):
         super(SRTrainer, self).__init__(settings)
         self.scale = settings.scale
+        self.scaler = Scale(self.scale)
         self.criterion = ComLoss(
             settings.iqa_model_path, 
             settings.__dict__.get('weights'), 
@@ -182,22 +187,29 @@ class SRTrainer(Trainer):
         )
 
         self.model = build_model(ARCH, scale=self.scale)
+        self.dataset = get_dataset(DATASET)
 
         if self.phase == 'train':
             self.train_loader = torch.utils.data.DataLoader(
-                WaterlooDataset(
+                self.dataset(
                     self.data_dir, 'train', self.scale, 
                     list_dir=self.list_dir, 
-                    transform=Compose(Crop(settings.patch_size), Flip())), 
-                batch_size=self.batch_size, shuffle=True, 
-                num_workers=self.num_workers, 
+                    transform=Compose(
+                        MSCrop(self.scale, settings.patch_size), 
+                        Flip()
+                    ), 
+                    repeats=settings.reproduct), 
+                batch_size=self.batch_size//settings.reproduct, 
+                shuffle=True, 
+                num_workers=settings.num_workers, 
                 pin_memory=True, drop_last=True
                 )
 
-        self.val_loader = WaterlooDataset(
+        self.val_loader = self.dataset(
             self.data_dir, 'val', 
             self.scale, 
-            subset=settings.subset, list_dir=self.list_dir)
+            subset=settings.subset, 
+            list_dir=self.list_dir)
        
         self.optimizer = torch.optim.Adam(self.model.parameters(), 
                                           betas=(0.9,0.999), 
@@ -210,14 +222,15 @@ class SRTrainer(Trainer):
         pixel_loss = Metric()
         feat_loss = Metric()
         len_train = len(self.train_loader)
-        pb = tqdm(enumerate(self.train_loader))
+        pb = tqdm(self.train_loader)
         
         self.model.train()
         # Make sure the criterion is also set to the correct state
         self.criterion.train()
 
-        for i, (lr, hr) in pb:
-            lr, hr = lr.cuda(), hr.cuda()
+        for i, (lr, hr) in enumerate(pb):
+            lr = lr.view(-1, *lr.shape[-3:]).cuda()
+            hr = hr.view(-1, *hr.shape[-3:]).cuda()
             sr = self.model(lr)
             
             loss, pl, fl = self.criterion(sr, hr)
@@ -244,15 +257,15 @@ class SRTrainer(Trainer):
         psnr = ShavedPSNR(self.scale)
         interp = ShavedPSNR(self.scale) # For simple upsampling
         len_val = len(self.val_loader)
-        to_image = self.val_loader.tensor_to_image
-        pb = tqdm(enumerate(self.val_loader))
+        pb = tqdm(self.val_loader)
+        to_image = self.dataset.tensor_to_image
 
         self.model.eval()
         self.criterion.eval()
 
         with torch.no_grad():
-            for i, (name, lr, hr) in pb:
-                if self.phase == 'train' and i >= 32: 
+            for i, (name, lr, hr) in enumerate(pb):
+                if self.phase == 'train' and i >= 16: 
                     # Do not validate all images on training phase
                     pb.close()
                     self.logger.warning("validation ends early")
@@ -269,7 +282,7 @@ class SRTrainer(Trainer):
 
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)
-                lr_int = resize(lr, (lr.shape[0]*self.scale, lr.shape[1]*self.scale))
+                lr_int = self.scaler(lr)
                 interp.update(lr_int, hr)
 
                 pb.set_description("[{}/{}]"
@@ -292,14 +305,14 @@ class SRTrainer(Trainer):
                             )
                 
                 if store:
-                    lr_name = self.path_ctrl.add_suffix(name, suffix='lr', underline=True)
+                    # lr_name = self.path_ctrl.add_suffix(name, suffix='lr', underline=True)
                     # int_name = self.path_ctrl.add_suffix(name, suffix='int', underline=True)
-                    hr_name = self.path_ctrl.add_suffix(name, suffix='hr', underline=True)
+                    # hr_name = self.path_ctrl.add_suffix(name, suffix='hr', underline=True)
                     sr_name = self.path_ctrl.add_suffix(name, suffix='sr', underline=True)
 
-                    self.save_image(lr_name, lr, epoch)
+                    # self.save_image(lr_name, lr, epoch)
                     # self.save_image(int_name, lr_int, epoch)
-                    self.save_image(hr_name, hr, epoch)
+                    # self.save_image(hr_name, hr, epoch)
                     self.save_image(sr_name, sr, epoch)
 
         return psnr.avg

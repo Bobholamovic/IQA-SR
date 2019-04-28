@@ -10,7 +10,16 @@ _INTERP_METHODS = {
 INTERP_ORDER = _INTERP_METHODS['BICUBIC']
 
 # Image postfixes to recognize in a given directory
-IMAGE_POSTFIXES = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']
+IMAGE_POSTFIXES = ['.jpg', '.jpeg',     '.png', '.bmp', '.tif', '.tiff']
 
 # Network architecture
 ARCH = 'SRResNet'
+
+# Dataset on training
+DATASET = 'DIV2K'
+# Expected names of data lists
+IMAGE_LIST_PATTERN = '{ph!s}_list.txt'
+LR_LIST_PATTERN = '{ph!s}_list_lr.txt'
+
+# Phases
+# To be added

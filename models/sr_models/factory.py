@@ -2,7 +2,9 @@ from importlib import import_module
 
 
 _archs = {
-    'SRResNet': 'srnet'
+    'SRResNet': 'srnet', 
+    'SRGAN': 'srgan', 
+    'VDSR': 'vdsr'
 }
 
 
@@ -15,8 +17,8 @@ def get_model(arch):
         return False
 
         
-def build_model(arch, **opts):
+def build_model(arch, *opts, **kopts):
     model = get_model(arch)
     if not model:
         raise ValueError('{} is not supported'.format(arch))
-    return model(**opts)
+    return model(*opts, **kopts)

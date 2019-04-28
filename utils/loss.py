@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models.iqanet import IQANet
+from dataset.dataset import get_dataset
+from constants import DATASET
+
 
 # Losses
 class IQALoss(nn.Module):
@@ -18,15 +21,18 @@ class IQALoss(nn.Module):
 
         self.patch_size = patch_size
         self.feat_names = feat_names
+        self._denorm = get_dataset(DATASET).denormalize
 
     def forward(self, output, target):
+        output = self._renormalize(output)
+        target = self._renormalize(target)
         output_patches = self._extract_patches(output)
         target_patches = self._extract_patches(target)
 
         self.iqa_model.eval()
-        score, features = self.iqa_model(output_patches, target_patches)
+        rets = self.iqa_model(output_patches, target_patches)
         
-        sel_feats = [v for k,v in features.items() if k in self.feat_names]
+        sel_feats = [v for k,v in rets.features.items() if k in self.feat_names]
 
         for i, f in enumerate(sel_feats):
             if isinstance(f, tuple):
@@ -49,7 +55,7 @@ class IQALoss(nn.Module):
         return patchs
 
     def _renormalize(self, img):
-        pass
+        return self._denorm(img, 'hr')/255.0
 
 
 class ComLoss(nn.Module):

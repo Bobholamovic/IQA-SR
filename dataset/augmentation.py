@@ -65,6 +65,7 @@ class DiscreteScale(Scale):
 
 
 class Flip(Transform):
+    # Flip or rotate
     _directions = ('ud', 'lr', 'no', '90', '180', '270')
     def __init__(self, direction=None):
         super(Flip, self).__init__(random_state=(direction is None))
@@ -140,7 +141,7 @@ class Crop(Transform):
             return x[:,w//2:]
         elif len(self.bounds) == 2:
             assert self.crop_size < (h, w)
-            cw, ch = self.crop_size
+            ch, cw = self.crop_size
             cx, cy = int((w-cw)*self.bounds[0]), int((h-ch)*self.bounds[1])
             return x[cy:cy+ch, cx:cx+cw]
         else:
@@ -149,7 +150,24 @@ class Crop(Transform):
     def _set_rand_param(self):
         self.bounds = (rand(), rand())
    
-        
+
+class MSCrop(Crop):
+    def __init__(self, scale, crop_size=None, bounds=None):
+        super(MSCrop, self).__init__(crop_size, bounds)
+        assert crop_size % scale == 0
+        self.scale = scale  # Scale factor
+
+    def __call__(self, lr, hr):
+        if self.random_state:
+            self._set_rand_param()
+        lr_crop = self._transform(lr)
+        self.crop_size = tuple(int(cs*self.scale) for cs in self.crop_size)
+        hr_crop = self._transform(hr)
+        self.crop_size = tuple(cs//self.scale for cs in self.crop_size)
+
+        return lr_crop, hr_crop
+
+
 def __test():
     a = np.arange(100).reshape((10,10)).astype(np.uint8)
     b = a.copy()
