@@ -2,9 +2,11 @@ from importlib import import_module
 
 
 _archs = {
-    'SRResNet': 'srnet', 
-    'SRGAN': 'srgan', 
-    'VDSR': 'vdsr'
+    'SRResNet': 'srnet',
+    'SRGAN': 'srgan',
+    'VDSR': 'vdsr',
+    'WDSR': 'wdsr_b',
+    'EDSR': 'edsr'
 }
 
 

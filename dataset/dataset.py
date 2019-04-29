@@ -197,7 +197,7 @@ class WaterlooDataset(SRDataset):
 
 class DIV2KDataset(SRDataset):
     _mean = 255.0 * np.asarray([0.4488, 0.4371, 0.4040])
-    _std = np.asarray([1.0, 1.0, 1.0])
+    _std = np.asarray([1.0, 1.0, 1.0])#*127.5
 
     def __init__(
         self, data_dir, phase, scale, subset='test', 

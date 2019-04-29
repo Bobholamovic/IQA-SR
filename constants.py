@@ -13,7 +13,7 @@ INTERP_ORDER = _INTERP_METHODS['BICUBIC']
 IMAGE_POSTFIXES = ['.jpg', '.jpeg',     '.png', '.bmp', '.tif', '.tiff']
 
 # Network architecture
-ARCH = 'SRResNet'
+ARCH = 'EDSR'
 
 # Dataset on training
 DATASET = 'DIV2K'

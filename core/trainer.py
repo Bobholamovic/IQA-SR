@@ -58,7 +58,7 @@ class Trainer:
         
         if self.load_checkpoint: self._resume_from_checkpoint()
         max_acc = self._init_max_acc
-        best_epoch = max(self.start_epoch-1, 0)
+        best_epoch = self.get_ckp_epoch()
 
         self.model.cuda()
         self.criterion.cuda()
@@ -68,7 +68,7 @@ class Trainer:
             
             self.logger.show_nl("Epoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
             # Train for one epoch
-            self.train_epoch()          
+            self.train_epoch()
 
             # Evaluate the model on validation set
             self.logger.show_nl("Validate")
@@ -88,7 +88,7 @@ class Trainer:
             if self._resume_from_checkpoint():
                 self.model.cuda()
                 self.criterion.cuda()
-                self.validate_epoch(self.start_epoch-1, self.save)
+                self.validate_epoch(self.get_ckp_epoch(), self.save)
         else:
             self.logger.warning("no checkpoint assigned!") 
 
@@ -120,7 +120,7 @@ class Trainer:
         checkpoint = torch.load(self.checkpoint)
 
         state_dict = self.model.state_dict()
-        ckp_dict = checkpoint['state_dict']
+        ckp_dict = checkpoint.get('state_dict', checkpoint)
         update_dict = {k:v for k,v in ckp_dict.items() 
             if k in state_dict and state_dict[k].shape == v.shape}
         
@@ -136,20 +136,19 @@ class Trainer:
             else:
                 self.logger.warning("=> {} params are to be loaded".format(num_to_update))
         else:
-            self.start_epoch = checkpoint['epoch']
-            self._init_max_acc = checkpoint['max_acc']
+            self.start_epoch = checkpoint.get('epoch', self.start_epoch)
+            self._init_max_acc = checkpoint.get('max_acc', self._init_max_acc)
         
         state_dict.update(update_dict)
         self.model.load_state_dict(state_dict)
 
-        self.logger.show("=> loaded checkpoint '{}' (epoch {})"
-                .format(self.checkpoint, checkpoint['epoch']-1))
+        self.logger.show("=> loaded checkpoint '{}'".format(self.checkpoint))
         return True
         
     def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
         state = {
-            'epoch': epoch+1, 
-            'state_dict': state_dict, 
+            'epoch': epoch+1,   # The checkpoint saves next epoch
+            'state_dict': state_dict,
             'max_acc': max_acc
         } 
         # Save history
@@ -171,6 +170,9 @@ class Trainer:
                     underline=True
                 )
             )
+    
+    def get_ckp_epoch(self):
+        return max(self.start_epoch-1, 0)
         
     
 class SRTrainer(Trainer):
@@ -198,8 +200,8 @@ class SRTrainer(Trainer):
                         MSCrop(self.scale, settings.patch_size), 
                         Flip()
                     ), 
-                    repeats=settings.reproduct), 
-                batch_size=self.batch_size//settings.reproduct, 
+                    repeats=settings.reproduce), 
+                batch_size=self.batch_size//settings.reproduce, 
                 shuffle=True, 
                 num_workers=settings.num_workers, 
                 pin_memory=True, drop_last=True
@@ -319,7 +321,7 @@ class SRTrainer(Trainer):
         
     def save_image(self, file_name, image, epoch):
         file_path = os.path.join(
-            'epoch_{}/'.format(epoch), 
+            'epoch_{}_{}/'.format(epoch, self.scale), 
             self.settings.out_dir, 
             file_name
         )
