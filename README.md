@@ -7,3 +7,4 @@ Quality Guided Single Image Super-Resolution
 
 - [ ] test script for single lr image or a folder
 - [ ] dump error logs
+- [ ] design a tree with all descendants in a single dictionary and bind the dict with OutPathGetter._keys

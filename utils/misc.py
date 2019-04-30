@@ -93,7 +93,7 @@ class _TreeNode:
             self._add_child(child)
         elif child.val == self._none:
             # Retain the links of the placeholder
-            # Thus just fill in it
+            # i.e. just fill in it
             child.val = val
 
         return child
@@ -152,10 +152,12 @@ class _Tree:
         super().__init__()
         self._sep = sep
         self._def_val = def_val
-        assert isinstance(strc_ele, dict)
-        # This is to avoid mutable parameter default
+        
         self.root = _TreeNode(name, value, parent=None, children={})
-        self.build_tree(OrderedDict(strc_ele or {}))
+        if strc_ele is not None:
+            assert isinstance(strc_ele, dict)
+            # This is to avoid mutable parameter default
+            self.build_tree(OrderedDict(strc_ele or {}))
 
     def build_tree(self, elements):
         # The siblings could be out-of-order
@@ -244,8 +246,8 @@ class _Tree:
 
     def join(self, *args):
         return self._sep.join(args)
-
-
+        
+        
 class OutPathGetter:
     def __init__(self, root='', log='logs', out='outs', weight='weights', suffix='', **subs):
         super().__init__()
@@ -253,13 +255,14 @@ class OutPathGetter:
         self._suffix = suffix
         self._keys = dict(log=log, out=out, weight=weight, **subs)
         self._dir_tree = _Tree(
-            root, '',
-            strc_ele=dict(zip(self._keys.values(), ['']*len(self._keys))),
+            root, 'root',
+            strc_ele=dict(zip(self._keys.values(), self._keys.keys())),
             sep='/', 
             def_val=''
         )
 
-        self.update(True)
+        self.update_keys(False)
+        self.update_tree(True)
 
         self.__counter = 0
 
@@ -271,7 +274,26 @@ class OutPathGetter:
     def root(self):
         return self._root
 
-    def update(self, verbose=False):
+    def _update_key(self, key, val, add=False, prefix=False):
+        if prefix:
+            val = os.path.join(self._root, val)
+        if add:
+            self._keys.setdefault(key, val)
+        else:
+            self._keys.__setitem__(key, val)
+
+    def _add_node(self, key, val, prefix=False):
+        if not prefix and key.startswith(self._root):
+            key = key[len(self._root)+1:]
+        self._dir_tree.add_node(key, val)
+
+    def update_keys(self, verbose=False):
+        for k, v in self._keys.items():
+            self._update_key(k, v, prefix=True)
+        if verbose:
+            print(self._keys)
+        
+    def update_tree(self, verbose=False):
         self._dir_tree.perform(lambda x: self.make_dirs(x.path))
         if verbose:
             print('\nFolder structure:')
@@ -283,7 +305,7 @@ class OutPathGetter:
             os.makedirs(path)
 
     def get_dir(self, key):
-        return os.path.join(self._root, self._keys.get(key, ''))
+        return self._keys.get(key, '')
 
     def get_path(
         self, key, file, 
@@ -298,14 +320,18 @@ class OutPathGetter:
 
         if auto_make and path:
             base_dir = os.path.dirname(path)
-            if base_dir in self._keys.values():
+
+            if base_dir in self:
                 return path
             if name:
-                self._keys.setdefault(name, base_dir)
+                self._update_key(name, base_dir)
+            '''
             else:
-                self._keys.__setitem__('new_{:03d}'.format(self.__counter), base_dir)
+                name = 'new_{:03d}'.format(self.__counter)
+                self._update_key(name, base_dir)
                 self.__counter += 1
-            self._dir_tree.add_node(base_dir)
+            '''
+            self._add_node(base_dir, name)
             self.make_dirs(base_dir)
         return path
 
@@ -316,13 +342,18 @@ class OutPathGetter:
         _suffix = self._suffix if len(suffix) < 1 else suffix
         return path[:pos] + ('_' if underline and _suffix else '') + _suffix + path[pos:]
 
+    def __contains__(self, value):
+        return value in self._keys.values()
+
 
 def __test():
     # root = _Tree('root', 0, strc_ele={'sib1':1, 'sib1/sib1':3, 'sib2/sib3/sib4':4, 'sib2':2, 'sib2/sib4':5})
-    pctrl = OutPathGetter(root='this', bob='bobb', bobby='bobby', snow='bobb/snowy', dudu='duck/dudu', suffix='wuna')
+    pctrl = OutPathGetter(root='this', root2='this', dudu='duck/dudu', suffix='wuna')
     print(pctrl.get_path('dudu', 'nana/xiaobao', auto_make=True, underline=True))
+    print(pctrl.get_path('dudu', 'nana/xiaobao2', auto_make=True, underline=True))
+    print(pctrl.get_path('dudu', 'nana/xiaobao', auto_make=True, underline=True))
+    print(pctrl.get_dir('root2'))
     print(pctrl.sub_dirs)
-    print(pctrl.root)
 
 
 if __name__ == '__main__':
