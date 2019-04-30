@@ -56,7 +56,8 @@ class Trainer:
     def train(self):
         cudnn.benchmark = True
         
-        if self.load_checkpoint: self._resume_from_checkpoint()
+        if self.load_checkpoint:
+            self._resume_from_checkpoint()
         max_acc = self._init_max_acc
         best_epoch = self.get_ckp_epoch()
 
@@ -75,13 +76,14 @@ class Trainer:
             acc = self.validate_epoch(epoch=epoch, store=self.save)
             
             is_best = acc > max_acc
-            if is_best: 
+            if is_best:
                 max_acc = acc
                 best_epoch = epoch
             self.logger.show_nl("Current: {:.6f} ({:03d})\tBest: {:.6f} ({:03d})\t".format(
                                 acc, epoch, max_acc, best_epoch))
 
-            self._save_checkpoint(self.model.state_dict(), max_acc, epoch, is_best)
+            # The checkpoint saves next epoch
+            self._save_checkpoint(self.model.state_dict(), max_acc, epoch+1, is_best)
     
     def validate(self):
         if self.checkpoint: 
@@ -137,7 +139,6 @@ class Trainer:
                 self.logger.warning("=> {} params are to be loaded".format(num_to_update))
         else:
             self.start_epoch = checkpoint.get('epoch', self.start_epoch)
-            self._init_max_acc = checkpoint.get('max_acc', self._init_max_acc)
         
         state_dict.update(update_dict)
         self.model.load_state_dict(state_dict)
@@ -147,16 +148,16 @@ class Trainer:
         
     def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
         state = {
-            'epoch': epoch+1,   # The checkpoint saves next epoch
+            'epoch': epoch,
             'state_dict': state_dict,
             'max_acc': max_acc
         } 
         # Save history
         history_path = self.path('weight', CKP_COUNTED.format(
-                                e=epoch+1, s=self.scale
+                                e=epoch, s=self.scale
                                 ), underline=True)
         if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
-            torch.save(state, history_path) 
+            torch.save(state, history_path)
         # Save latest
         latest_path = self.path(
             'weight', CKP_LATEST.format(s=self.scale), 
@@ -172,6 +173,8 @@ class Trainer:
             )
     
     def get_ckp_epoch(self):
+        # Get current epoch of the checkpoint
+        # For dismatched ckp or no ckp, set to 0
         return max(self.start_epoch-1, 0)
         
     
@@ -321,7 +324,7 @@ class SRTrainer(Trainer):
         
     def save_image(self, file_name, image, epoch):
         file_path = os.path.join(
-            'epoch_{}_{}/'.format(epoch, self.scale), 
+            'epoch_{}/x{}/'.format(epoch, self.scale), 
             self.settings.out_dir, 
             file_name
         )
