@@ -1,6 +1,7 @@
 import logging
 import os
 from time import localtime
+from collections import OrderedDict
 
 FORMAT_LONG = "[%(asctime)-15s %(filename)s:%(lineno)d %(funcName)s] %(message)s"
 FORMAT_SHORT = "%(message)s"
@@ -49,28 +50,232 @@ class Logger:
         return self._logger.error(*args, **kwargs)
 
 
+class _TreeNode:
+    _sep = '/'
+    _none = None
+
+    def __init__(self, name, value=None, parent=None, children=None):
+        super().__init__()
+        self.name = name
+        self.val = value
+        self.parent = parent
+        self.children = children if isinstance(children, dict) else {}
+        if isinstance(children, list):
+            for child in children:
+                self._add_child(child)
+        self.path = name
+    
+    def get_child(self, name, def_val=None):
+        return self.children.get(name, def_val)
+
+    def set_child(self, name, val=None):
+        r"""
+            Set the value of an existing node. 
+            If the node does not exist, return nothing
+        """
+        child = self.get_child(name)
+        if child is not None:
+            child.val = val
+
+        return child
+
+    def add_place_holder(self, name):
+        return self.add_child(name, val=self._none)
+
+    def add_child(self, name, val):
+        r"""
+            If not exists or is a placeholder, create it
+            Otherwise skips and returns the existing node
+        """
+        child = self.get_child(name, None)
+        if child is None:
+            child = _TreeNode(name, val, parent=self)
+            self._add_child(child)
+        elif child.val == self._none:
+            # Retain the links of the placeholder
+            # Thus just fill in it
+            child.val = val
+
+        return child
+
+    def is_leaf(self):
+        return len(self.children) == 0
+
+    def __repr__(self):
+        try:
+            repr = self.path + ' ' + str(self.val)
+        except TypeError:
+            repr = self.path
+        return repr
+
+    def __contains__(self, name):
+        return name in self.children.keys()
+
+    def __getitem__(self, key):
+        return self.get_child(key)
+
+    def _add_child(self, node):
+        r""" Into children dictionary and set path and parent """
+        self.children.update({
+            node.name: node
+        })
+        node.path = self._sep.join([self.path, node.name])
+        node.parent = self
+
+    def do(self, func):
+        r"""
+            Perform a callback function on ALL descendants
+            This is useful for the recursive traversal
+        """
+        ret = [func(self)]
+        for _, node in self.children.items():
+            ret.extend(node.do(func))
+        return ret
+
+    def bfs_tracker(self):
+        queue = []
+        queue.insert(0, self)
+        while(queue):
+            root = queue.pop()
+            yield root
+            if root.is_leaf():
+                continue
+            for c in root.children.values():
+                queue.insert(0, c)
+
+
+class _Tree:
+    def __init__(
+        self, name, value=None, strc_ele=None, 
+        sep=_TreeNode._sep, def_val=_TreeNode._none
+    ):
+        super().__init__()
+        self._sep = sep
+        self._def_val = def_val
+        assert isinstance(strc_ele, dict)
+        # This is to avoid mutable parameter default
+        self.root = _TreeNode(name, value, parent=None, children={})
+        self.build_tree(OrderedDict(strc_ele or {}))
+
+    def build_tree(self, elements):
+        # The siblings could be out-of-order
+        for path, ele in elements.items():
+            self.add_node(path, ele)
+
+    def get_root(self):
+        r""" Get separated root node """
+        return _TreeNode(
+            self.root.name, self.root.value, 
+            parent=None, children=None
+        )
+
+    def __repr__(self):
+        return self.__dumps__()
+        
+    def __dumps__(self):
+        r""" Dump to string """
+        _str = ''
+        # DFS
+        stack = []
+        stack.append((self.root, 0))
+        while(stack):
+            root, layer = stack.pop()
+            _str += ' '*layer + '-' + root.__repr__() + '\n'
+
+            if root.is_leaf():
+                continue
+            # Note that the order of the siblings is not retained
+            for c in reversed(list(root.children.values())):
+                stack.append((c, layer+1))
+
+        return _str
+
+    def vis(self):
+        r""" Visualize the structure of the tree """
+        print(self.__dumps__())
+
+    def __contains__(self, obj):
+        return any(self.perform(lambda node: obj in node))
+
+    def perform(self, func):
+        return self.root.do(func)
+
+    def get_node(self, tar, mode='name'):
+        r"""
+            This is different from the travasal in that
+            the search allows early stop
+        """
+        if mode == 'path':
+            nodes = self.parse_path(tar)
+            root = self.root
+            for r in nodes:
+                if root is None:
+                    root = root.get_child(r)
+            return root
+        else:
+            # BFS
+            bfs_tracker = self.root.bfs_tracker()
+            # bfs_tracker.send(None)
+
+            for node in bfs_tracker:
+                if getattr(node, mode) == tar:
+                    return node
+        return
+
+    def set_node(self, path, val):
+        node = self.get_node(path, mode=path)
+        if node is not None:
+            node.val = val
+        return node
+
+    def add_node(self, path, val=None):
+        if val is None:
+            val = self._def_val
+        names = self.parse_path(path)
+        root = self.root
+        for name in names[:-1]:
+            # Add placeholders
+            root = root.add_child(name, self._def_val)
+        root = root.add_child(names[-1], val)
+        return root
+
+    def parse_path(self, path):
+        return path.split(self._sep)
+
+    def join(self, *args):
+        return self._sep.join(args)
+
+
 class OutPathGetter:
     def __init__(self, root='', log='logs', out='outs', weight='weights', suffix='', **subs):
         super().__init__()
         self._root = root
         self._suffix = suffix
-        self._sub_dirs = dict(log=log, out=out, weight=weight, **subs)
+        self._keys = dict(log=log, out=out, weight=weight, **subs)
+        self._dir_tree = _Tree(
+            root, '',
+            strc_ele=dict(zip(self._keys.values(), ['']*len(self._keys))),
+            sep='/', 
+            def_val=''
+        )
 
-        self.build_dir_tree()
+        self.update(True)
+
+        self.__counter = 0
 
     @property
     def sub_dirs(self):
-        return tuple(self._sub_dirs)
+        return str(self._dir_tree)
 
     @property
     def root(self):
         return self._root
 
-    def build_dir_tree(self):
-        for key, name in self._sub_dirs.items():
-            folder = os.path.join(self._root, name)
-            self._sub_dirs[key] = folder    # Update
-            self.make_dirs(folder)
+    def update(self, verbose=False):
+        self._dir_tree.perform(lambda x: self.make_dirs(x.path))
+        if verbose:
+            print('\nFolder structure:')
+            print(self._dir_tree)
 
     @staticmethod
     def make_dirs(path):
@@ -78,9 +283,13 @@ class OutPathGetter:
             os.makedirs(path)
 
     def get_dir(self, key):
-        return self._sub_dirs.get(key, '')
+        return os.path.join(self._root, self._keys.get(key, ''))
 
-    def get_path(self, key, file, auto_make=False, suffix=True, underline=False):
+    def get_path(
+        self, key, file, 
+        name='', auto_make=False, 
+        suffix=True, underline=False
+    ):
         folder = self.get_dir(key)
         if suffix:
             path = os.path.join(folder, self.add_suffix(file, underline=underline))
@@ -88,12 +297,33 @@ class OutPathGetter:
             path = os.path.join(folder, file)
 
         if auto_make and path:
-            self.make_dirs(os.path.dirname(path))
+            base_dir = os.path.dirname(path)
+            if base_dir in self._keys.values():
+                return path
+            if name:
+                self._keys.setdefault(name, base_dir)
+            else:
+                self._keys.__setitem__('new_{:03d}'.format(self.__counter), base_dir)
+                self.__counter += 1
+            self._dir_tree.add_node(base_dir)
+            self.make_dirs(base_dir)
         return path
 
     def add_suffix(self, path, suffix='', underline=False):
         pos = path.rfind('.')
-        assert pos > -1
+        if pos == -1:
+            pos = len(path)
         _suffix = self._suffix if len(suffix) < 1 else suffix
         return path[:pos] + ('_' if underline and _suffix else '') + _suffix + path[pos:]
 
+
+def __test():
+    # root = _Tree('root', 0, strc_ele={'sib1':1, 'sib1/sib1':3, 'sib2/sib3/sib4':4, 'sib2':2, 'sib2/sib4':5})
+    pctrl = OutPathGetter(root='this', bob='bobb', bobby='bobby', snow='bobb/snowy', dudu='duck/dudu', suffix='wuna')
+    print(pctrl.get_path('dudu', 'nana/xiaobao', auto_make=True, underline=True))
+    print(pctrl.sub_dirs)
+    print(pctrl.root)
+
+
+if __name__ == '__main__':
+    __test()
