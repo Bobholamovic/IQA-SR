@@ -140,9 +140,9 @@ class Crop(Transform):
         elif self.bounds == 'r':
             return x[:,w//2:]
         elif len(self.bounds) == 2:
-            assert self.crop_size < (h, w)
+            # assert self.crop_size < (h, w)
             ch, cw = self.crop_size
-            cx, cy = int((w-cw)*self.bounds[0]), int((h-ch)*self.bounds[1])
+            cx, cy = int((w-cw+1)*self.bounds[0]), int((h-ch+1)*self.bounds[1])
             return x[cy:cy+ch, cx:cx+cw]
         else:
             left, top, right, lower = self.bounds
@@ -152,24 +152,36 @@ class Crop(Transform):
    
 
 class MSCrop(Crop):
-    def __init__(self, scale, crop_size=None, bounds=None):
-        super(MSCrop, self).__init__(crop_size, bounds)
-        assert crop_size % scale == 0
+    def __init__(self, scale, crop_size=None):
+        super(MSCrop, self).__init__(crop_size)
         self.scale = scale  # Scale factor
 
     def __call__(self, lr, hr):
         if self.random_state:
             self._set_rand_param()
+        # Note that random scaling bounds may cause pixel offsets
+        # which significantly damages the training effect, 
+        # thus the quadruple mode is desired
+        left, top, cw, ch = self._get_quad(*lr.shape[:2])
+        self._set_quad(left, top, cw, ch)
         lr_crop = self._transform(lr)
-        self.crop_size = tuple(int(cs*self.scale) for cs in self.crop_size)
+        left, top, cw, ch = [int(it*self.scale) for it in (left, top, cw, ch)]
+        self._set_quad(left, top, cw, ch)
         hr_crop = self._transform(hr)
-        self.crop_size = tuple(cs//self.scale for cs in self.crop_size)
 
         return lr_crop, hr_crop
 
+    def _get_quad(self, h, w):
+        ch, cw = self.crop_size
+        cx, cy = int((w-cw+1)*self.bounds[0]), int((h-ch+1)*self.bounds[1])
+        return cx, cy, cw, ch
+
+    def _set_quad(self, left, top, cw, ch):
+        self.bounds = (left, top, left+cw, top+ch)
+
 
 def __test():
-    a = np.arange(100).reshape((10,10)).astype(np.uint8)
+    a = np.arange(100).reshape((5,5,4)).astype(np.uint8)
     b = a.copy()
     tf = Compose(Flip(), Crop(3))
     c,d = tf(a,b)

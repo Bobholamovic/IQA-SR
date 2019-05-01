@@ -277,6 +277,7 @@ class SRTrainer(Trainer):
                     break
                     
                 lr, hr = lr.unsqueeze(0).cuda(), hr.unsqueeze(0).cuda()
+
                 sr = self.model(lr)
 
                 losses.update(sr, hr)

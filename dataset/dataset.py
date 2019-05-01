@@ -94,7 +94,7 @@ class SRDataset(torch.utils.data.Dataset):
                         return True
                 return False
             self.image_list = [f for f in file_list if isimg(f)]
-            assert len(self.image_list) > 0
+            # assert len(self.image_list) > 0
 
         self.num = len(self.image_list)
 
