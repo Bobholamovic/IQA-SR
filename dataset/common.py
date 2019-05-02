@@ -31,6 +31,10 @@ def to_array(x):
 
 def resize(x, size, no_blur=False):
     blur = GAUSSIAN_BLUR and not no_blur
+    # Note that this operation does not promise 
+    # as good performance as those done by MATLAB
+    # or some other tools. 
+    # The PSNR decreases by roughly 1dB. 
     return transform.resize(
         x.astype(np.float), 
         size,

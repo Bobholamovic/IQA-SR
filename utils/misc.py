@@ -235,11 +235,13 @@ class _Tree:
             val = self._def_val
         names = self.parse_path(path)
         root = self.root
+        nodes = [root]
         for name in names[:-1]:
             # Add placeholders
             root = root.add_child(name, self._def_val)
+            nodes.append(root)
         root = root.add_child(names[-1], val)
-        return root
+        return root, nodes
 
     def parse_path(self, path):
         return path.split(self._sep)
@@ -285,7 +287,7 @@ class OutPathGetter:
     def _add_node(self, key, val, prefix=False):
         if not prefix and key.startswith(self._root):
             key = key[len(self._root)+1:]
-        self._dir_tree.add_node(key, val)
+        return self._dir_tree.add_node(key, val)
 
     def update_keys(self, verbose=False):
         for k, v in self._keys.items():
@@ -294,15 +296,15 @@ class OutPathGetter:
             print(self._keys)
         
     def update_tree(self, verbose=False):
-        self._dir_tree.perform(lambda x: self.make_dirs(x.path))
+        self._dir_tree.perform(lambda x: self.make_dir(x.path))
         if verbose:
             print('\nFolder structure:')
             print(self._dir_tree)
 
     @staticmethod
-    def make_dirs(path):
+    def make_dir(path):
         if not os.path.exists(path):
-            os.makedirs(path)
+            os.mkdir(path)
 
     def get_dir(self, key):
         return self._keys.get(key, '')
@@ -331,8 +333,10 @@ class OutPathGetter:
                 self._update_key(name, base_dir)
                 self.__counter += 1
             '''
-            self._add_node(base_dir, name)
-            self.make_dirs(base_dir)
+            des, visit = self._add_node(base_dir, name)
+            # Create directories along the visiting path
+            for d in visit: self.make_dir(d.path)
+            self.make_dir(des.path)
         return path
 
     def add_suffix(self, path, suffix='', underline=False):
@@ -349,7 +353,7 @@ class OutPathGetter:
 def __test():
     # root = _Tree('root', 0, strc_ele={'sib1':1, 'sib1/sib1':3, 'sib2/sib3/sib4':4, 'sib2':2, 'sib2/sib4':5})
     pctrl = OutPathGetter(root='this', root2='this', dudu='duck/dudu', suffix='wuna')
-    print(pctrl.get_path('dudu', 'nana/xiaobao', auto_make=True, underline=True))
+    print(pctrl.get_path('dudu', 'nana/wuna/xiaobao', auto_make=True, underline=True))
     print(pctrl.get_path('dudu', 'nana/xiaobao2', auto_make=True, underline=True))
     print(pctrl.get_path('dudu', 'nana/xiaobao', auto_make=True, underline=True))
     print(pctrl.get_dir('root2'))

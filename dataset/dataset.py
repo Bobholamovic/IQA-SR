@@ -32,18 +32,22 @@ class SRDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         name = self._get_name(index)
+        hr_img = self._fetch_hr(index)
 
         if self.phase == 'test':
-            # This is special cuz lr images are not
-            # to be assessed during test phase.
-            # Fetch them like hr images from {phase}_list.txt
-            # or from a folder.
-            lr_img = self._fetch_hr(index)
-            name, self.to_tensor_lr(lr_img)
-        else:
-            hr_img = self._fetch_hr(index)
-            lr_img = self._fetch_lr(index) if self.lr_avai \
-                else self._make_lr(hr_img)
+            # This is special cuz hr labels can not
+            # be accessed during the test phase.
+            # Fetch the large images from {phase}_list.txt
+            # or from a folder as the lr inputs. 
+            return name, self.to_tensor_lr(hr_img)
+        else: 
+            if self.lr_avai:
+                lr_img = self._fetch_lr(index)
+            else:
+                # Mod-crop hr only when lr is not provided
+                hr_img = mod_crop(hr_img, self.scale)
+                lr_img = self._make_lr(hr_img)
+
             if self.transform is not None:
                 if self.repeats > 1:
                     hr_list, lr_list = [], []
@@ -70,20 +74,20 @@ class SRDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.num
         
-    def _read_lists(self):   
+    def _read_lists(self):
         assert isdir(self.list_dir)
         self.lr_avai = False
         list_path = join(self.list_dir, IMAGE_LIST_PATTERN.format(ph=self.subset))  
-        if exists(list_path):  
-            self._fetch_hr = self._fetch_hr_from_list
+        if exists(list_path):
             self.image_list = self._read_single_list(list_path)
+            self.image_list = [join(self.data_dir, p) for p in self.image_list]
             lr_path = join(self.list_dir, LR_LIST_PATTERN.format(ph=self.subset))
             if exists(lr_path):
                 self.lr_list = self._read_single_list(lr_path)
+                self.lr_list = [join(self.data_dir, p) for p in self.lr_list]
                 self.lr_avai = True
         else:
             # Handle a directory
-            self._fetch_hr = self._fetch_hr_from_folder
             from glob import glob
             from constants import IMAGE_POSTFIXES as IPF
             file_list = glob(join(self.data_dir, '*'))
@@ -102,22 +106,14 @@ class SRDataset(torch.utils.data.Dataset):
         return self.scaler(hr)
 
     def _fetch_lr(self, index):
-        data_path = join(self.data_dir, self.lr_list[index])
-        return default_loader(data_path)          
+        return default_loader(self.lr_list[index])
 
-    def _fetch_hr_from_list(self, index):
-        data_path = join(self.data_dir, self.image_list[index])
-        data = default_loader(data_path)   
-        return mod_crop(data, self.scale)
-
-    def _fetch_hr_from_folder(self, index):
-        data = default_loader(self.image_list[index])
-        return mod_crop(data, self.scale)
+    def _fetch_hr(self, index):
+        return default_loader(self.image_list[index])
 
     @staticmethod
     def _read_single_list(pth):
-        with open(pth, 'r') as lst:
-            return [line.strip() for line in lst]
+        return [line.strip() for line in open(pth, 'r')]
 
     def _get_name(self, index):
         return basename(self.image_list[index])
