@@ -7,7 +7,7 @@ import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 from skimage import io
 from dataset.dataset import get_dataset
-from dataset.augmentation import Compose, MSCrop, Flip, Scale
+from dataset.augmentation import Compose, MSCrop, Flip
 from utils.metric import ShavedPSNR, ShavedSSIM, Metric
 from utils.loss import ComLoss
 from utils.misc import Logger
@@ -182,7 +182,6 @@ class SRTrainer(Trainer):
     def __init__(self, settings):
         super(SRTrainer, self).__init__(settings)
         self.scale = settings.scale
-        self.scaler = Scale(self.scale)
         self.criterion = ComLoss(
             settings.iqa_model_path, 
             settings.__dict__.get('weights'), 
@@ -260,7 +259,6 @@ class SRTrainer(Trainer):
         losses = Metric(self.criterion)
         ssim = ShavedSSIM(self.scale)
         psnr = ShavedPSNR(self.scale)
-        interp = ShavedPSNR(self.scale) # For simple upsampling
         len_val = len(self.val_loader)
         pb = tqdm(self.val_loader)
         to_image = self.dataset.tensor_to_image
@@ -288,8 +286,6 @@ class SRTrainer(Trainer):
 
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)
-                lr_int = self.scaler(lr)
-                interp.update(lr_int, hr)
 
                 pb.set_description("[{}/{}]"
                         "Loss {loss.val:.4f} ({loss.avg:.4f}) "
@@ -301,23 +297,20 @@ class SRTrainer(Trainer):
                 self.logger.dump("[{}/{}]"
                             "{} "
                             "Loss {loss.val:.4f} ({loss.avg:.4f}) "
-                            "Interp {interp.val:.4f} ({interp.avg:.4f}) "
                             "PSNR {psnr.val:.4f} ({psnr.avg:.4f}) "
                             "SSIM {ssim.val:.4f} ({ssim.avg:.4f})"
                             .format(
-                                i+1, len_val, name, 
-                                loss=losses, interp=interp, 
+                                i+1, len_val, name,
+                                loss=losses,
                                 psnr=psnr, ssim=ssim)
                             )
                 
                 if store:
                     # lr_name = self.path_ctrl.add_suffix(name, suffix='lr', underline=True)
-                    # int_name = self.path_ctrl.add_suffix(name, suffix='int', underline=True)
                     # hr_name = self.path_ctrl.add_suffix(name, suffix='hr', underline=True)
                     sr_name = self.path_ctrl.add_suffix(name, suffix='sr', underline=True)
 
                     # self.save_image(lr_name, lr, epoch)
-                    # self.save_image(int_name, lr_int, epoch)
                     # self.save_image(hr_name, hr, epoch)
                     self.save_image(sr_name, sr, epoch)
 

@@ -8,6 +8,8 @@ randi = random.randint
 choice = random.choice
 uniform = random.uniform
 
+# For the transformations, better DOUBLE-in-DOUBLE-out to avoid precision loss
+
 def _istuple(x): return isinstance(x, (tuple, list))
 
 
@@ -159,9 +161,9 @@ class MSCrop(Crop):
     def __call__(self, lr, hr):
         if self.random_state:
             self._set_rand_param()
-        # Note that random scaling bounds may cause pixel offsets
-        # which significantly damages the training effect, 
-        # thus the quadruple mode is desired
+        # I've noticed that random scaling bounds may cause pixel misalignment
+        # between the lr-hr pair, which significantly damages the training
+        # effect, thus the quadruple mode is desired
         left, top, cw, ch = self._get_quad(*lr.shape[:2])
         self._set_quad(left, top, cw, ch)
         lr_crop = self._transform(lr)
