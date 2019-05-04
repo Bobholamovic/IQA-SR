@@ -50,7 +50,8 @@ class Trainer:
 
     def train_epoch(self):
         raise NotImplementedError
-    def validate_epoch(self):
+        
+    def validate_epoch(self, epoch, store):
         raise NotImplementedError
 
     def train(self):

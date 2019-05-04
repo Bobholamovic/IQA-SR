@@ -8,6 +8,7 @@ from os.path import join, basename, exists
 from pdb import set_trace as db
 
 from core.trainer import SRTrainer
+from core.predictor import SRPredictor
 from utils.misc import OutPathGetter
 
 ## Disturbing warnings from skimage
@@ -46,7 +47,7 @@ def parse_config(cfg_name, cfg):
 def parse_args():
     # Training settings
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('cmd', choices=['train', 'val'])
+    parser.add_argument('cmd', choices=['train', 'val', 'test'])
     parser.add_argument('-d', '--data-dir', default='/home/gdf/Datasets/DIV2K/')
     parser.add_argument('-l', '--list-dir', default='/home/gdf/Datasets/DIV2K/lists/X2/')
     parser.add_argument('-o', '--out-dir', default='')
@@ -90,14 +91,16 @@ def parse_args():
         # Settings from cfg file overwrite those in args
         args.__dict__.update(cfg)
 
-    args.global_path = OutPathGetter(
-                root=os.path.join(args.exp_dir, args.tag), 
-                suffix=args.suffix)
+    if args.cmd in ('train', 'val'):
+        # Disable global path controller in test phase
+        args.global_path = OutPathGetter(
+                    root=os.path.join(args.exp_dir, args.tag), 
+                    suffix=args.suffix)
 
-    if exists(args.exp_config):
-        # Make a copy of the config file
-        cfg_path = args.global_path.get_path('log', cfg_name)
-        shutil.copy(args.exp_config, cfg_path)
+        if exists(args.exp_config):
+            # Make a copy of the config file
+            cfg_path = args.global_path.get_path('log', cfg_name)
+            shutil.copy(args.exp_config, cfg_path)
 
     return args
 
@@ -106,11 +109,24 @@ def main():
     args = parse_args()
 
     if args.cmd == 'train':
-        trainer = SRTrainer(args)
-        trainer.train()
+        solver = SRTrainer(args)
+        solver.train()
     elif args.cmd == 'val':
-        trainer = SRTrainer(args)
-        trainer.validate()
+        solver = SRTrainer(args)
+        solver.validate()
+    elif args.cmd == 'test':
+        opts = dict(
+            scale=args.scale,
+            data_dir=args.data_dir,
+            ckp_path=args.resume,
+            save_lr=not args.save_off,
+            list_dir=args.list_dir,
+            out_dir=args.out_dir
+        )
+        if not args.log_off:
+            opts['log_dir'] = args.out_dir
+        solver = SRPredictor(**opts)
+        solver.test()
     else:
         pass
 
