@@ -72,7 +72,7 @@ def parse_args():
     parser.add_argument('--exp-config', type=str, default='')
     parser.add_argument('--subset', type=str, default='test')
     parser.add_argument('-s', '--scale', type=int, default=4)
-    parser.add_argument('--save-off', action='store_true')
+    parser.add_argument('--save-on', action='store_true')
     parser.add_argument('--log-off', action='store_true')
     parser.add_argument('--suffix-off', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
@@ -80,6 +80,7 @@ def parse_args():
     parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_n8_p32_d3.pkl')
     parser.add_argument('--trace-freq', type=int, default=50)
     parser.add_argument('--reproduce', type=int, default=1)
+    parser.add_argument('--alpha', type=float, default=1.0, help='weighting coefficient of pixel loss')
 
     args = parser.parse_args()
 
@@ -119,7 +120,7 @@ def main():
             scale=args.scale,
             data_dir=args.data_dir,
             ckp_path=args.resume,
-            save_lr=not args.save_off,
+            save_lr=args.save_on,
             list_dir=args.list_dir,
             out_dir=args.out_dir
         )

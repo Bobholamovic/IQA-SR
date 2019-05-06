@@ -231,6 +231,8 @@ class _Tree:
         return node
 
     def add_node(self, path, val=None):
+        if not path.strip():
+            raise ValueError('the path is null')
         if val is None:
             val = self._def_val
         names = self.parse_path(path)
@@ -280,6 +282,7 @@ class OutPathGetter:
         if prefix:
             val = os.path.join(self._root, val)
         if add:
+            # Do not edit if exists
             self._keys.setdefault(key, val)
         else:
             self._keys.__setitem__(key, val)
@@ -315,22 +318,24 @@ class OutPathGetter:
         suffix=True, underline=False
     ):
         folder = self.get_dir(key)
+        if len(folder) < 1:
+            raise KeyError('key not found') 
         if suffix:
             path = os.path.join(folder, self.add_suffix(file, underline=underline))
         else:
             path = os.path.join(folder, file)
 
-        if auto_make and path:
+        if auto_make:
             base_dir = os.path.dirname(path)
 
             if base_dir in self:
                 return path
             if name:
-                self._update_key(name, base_dir)
+                self._update_key(name, base_dir, add=True)
             '''
             else:
                 name = 'new_{:03d}'.format(self.__counter)
-                self._update_key(name, base_dir)
+                self._update_key(name, base_dir, add=True)
                 self.__counter += 1
             '''
             des, visit = self._add_node(base_dir, name)
@@ -356,6 +361,7 @@ def __test():
     print(pctrl.get_path('dudu', 'nana/wuna/xiaobao', auto_make=True, underline=True))
     print(pctrl.get_path('dudu', 'nana/xiaobao2', auto_make=True, underline=True))
     print(pctrl.get_path('dudu', 'nana/xiaobao', auto_make=True, underline=True))
+    print(pctrl.get_path('root', 'dandan/xiaona', name='dandan', auto_make=True, underline=True))
     print(pctrl.get_dir('root2'))
     print(pctrl.sub_dirs)
 

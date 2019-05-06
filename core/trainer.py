@@ -28,7 +28,7 @@ class Trainer:
         self.load_checkpoint = (len(self.checkpoint)>0)
         self.num_epochs = settings.num_epochs
         self.lr = settings.lr
-        self.save = not settings.save_off
+        self.save = settings.save_on
         self.path_ctrl = settings.global_path
         self.path = self.path_ctrl.get_path
 
@@ -50,7 +50,7 @@ class Trainer:
 
     def train_epoch(self):
         raise NotImplementedError
-        
+
     def validate_epoch(self, epoch, store):
         raise NotImplementedError
 
@@ -187,6 +187,7 @@ class SRTrainer(Trainer):
             settings.iqa_model_path, 
             settings.__dict__.get('weights'), 
             settings.__dict__.get('feat_names'), 
+            settings.alpha, 
             settings.iqa_patch_size, 
             settings.criterion
         )
@@ -234,6 +235,8 @@ class SRTrainer(Trainer):
         self.criterion.train()
 
         for i, (lr, hr) in enumerate(pb):
+            # Note that the lr here means low-resolution (images)
+            # rather than learning rate
             lr = lr.view(-1, *lr.shape[-3:]).cuda()
             hr = hr.view(-1, *hr.shape[-3:]).cuda()
             sr = self.model(lr)

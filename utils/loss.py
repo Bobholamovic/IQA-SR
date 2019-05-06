@@ -59,7 +59,10 @@ class IQALoss(nn.Module):
 
 
 class ComLoss(nn.Module):
-    def __init__(self, model_path, weights, feat_names, patch_size=32, criterion='MAE'):
+    def __init__(
+        self, model_path, weights, feat_names,
+        alpha=1.0, patch_size=32, criterion='MAE'
+    ):
         super(ComLoss, self).__init__()
 
         if criterion == 'MAE':
@@ -74,6 +77,7 @@ class ComLoss(nn.Module):
                 self.criterion = criterion
             raise ValueError('invalid criterion')
             
+        self.alpha = alpha
         self.weights = weights
         if self.weights is not None:
             assert len(weights) == len(feat_names)
@@ -88,7 +92,7 @@ class ComLoss(nn.Module):
         pixel_loss = self._pixel_criterion(output, target)
         feat_loss = self._feat_criterion(output, target)
 
-        total_loss = pixel_loss + feat_loss
+        total_loss = self.alpha*pixel_loss + feat_loss
 
         if self.training:
             return total_loss, pixel_loss, feat_loss
