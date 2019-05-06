@@ -310,7 +310,7 @@ class OutPathGetter:
             os.mkdir(path)
 
     def get_dir(self, key):
-        return self._keys.get(key, '')
+        return self._keys.get(key, '') if key != 'root' else self.root
 
     def get_path(
         self, key, file, 

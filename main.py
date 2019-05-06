@@ -100,7 +100,7 @@ def parse_args():
 
         if exists(args.exp_config):
             # Make a copy of the config file
-            cfg_path = args.global_path.get_path('log', cfg_name)
+            cfg_path = args.global_path.get_path('root', cfg_name, suffix=False)
             shutil.copy(args.exp_config, cfg_path)
 
     return args
