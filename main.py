@@ -75,6 +75,9 @@ def parse_args():
     parser.add_argument('--save-on', action='store_true')
     parser.add_argument('--log-off', action='store_true')
     parser.add_argument('--suffix-off', action='store_true')
+    parser.add_argument('--anew', action='store_true',
+                        help='clear history and start from epoch 0 with the checkpoint loaded')
+    parser.add_argument('--pause', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
     parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_n8_p32_d3.pkl')

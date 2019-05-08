@@ -29,6 +29,7 @@ class Trainer:
         self.num_epochs = settings.num_epochs
         self.lr = settings.lr
         self.save = settings.save_on
+        self.from_pause = self.settings.pause
         self.path_ctrl = settings.global_path
         self.path = self.path_ctrl.get_path
 
@@ -65,7 +66,8 @@ class Trainer:
         self.model.cuda()
         self.criterion.cuda()
         
-        for epoch in range(self.start_epoch, self.num_epochs):
+        end_epoch = self.num_epochs if self.from_pause else self.start_epoch+self.num_epochs
+        for epoch in range(self.start_epoch, end_epoch):
             lr = self._adjust_learning_rate(epoch)
             
             self.logger.show_nl("Epoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
@@ -100,14 +102,18 @@ class Trainer:
         
     def _adjust_learning_rate(self, epoch):
         # Note that this does not take effect for separate learning rates
+        start_epoch = 0 if self.from_pause else self.start_epoch
         if self.settings.lr_mode == 'step':
-            lr = self.lr * (0.5 ** ((epoch-self.start_epoch) // self.settings.step))
+            lr = self.lr * (0.5 ** ((epoch-start_epoch) // self.settings.step))
         elif self.settings.lr_mode == 'poly':
-            lr = self.lr * (1 - (epoch-self.start_epoch) / (self.num_epochs-self.start_epoch)) ** 1.1
+            lr = self.lr * (1 - (epoch-start_epoch) / (self.num_epochs-start_epoch)) ** 1.1
         elif self.settings.lr_mode == 'const':
-            return self.lr
+            lr = self.lr
         else:
             raise ValueError('unknown lr mode {}'.format(self.settings.lr_mode))
+
+        if lr == self.lr:
+            return self.lr
 
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
@@ -138,13 +144,16 @@ class Trainer:
                 return False
             else:
                 self.logger.warning("=> {} params are to be loaded".format(num_to_update))
-        else:
+        elif (not self.settings.anew) or (self.phase != 'train'):
             self.start_epoch = checkpoint.get('epoch', self.start_epoch)
-        
+            self._init_max_acc = checkpoint.get('max_acc', self._init_max_acc)
+
         state_dict.update(update_dict)
         self.model.load_state_dict(state_dict)
 
-        self.logger.show("=> loaded checkpoint '{}'".format(self.checkpoint))
+        self.logger.show("=> loaded checkpoint '{}' (epoch {}, max_acc {:.4f})".format(
+            self.checkpoint, self.get_ckp_epoch(), self._init_max_acc
+            ))
         return True
         
     def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
