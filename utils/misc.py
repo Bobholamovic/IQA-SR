@@ -122,14 +122,14 @@ class _TreeNode:
         node.path = self._sep.join([self.path, node.name])
         node.parent = self
 
-    def do(self, func):
+    def apply(self, func):
         r"""
-            Perform a callback function on ALL descendants
+            Apply a callback function on ALL descendants
             This is useful for the recursive traversal
         """
         ret = [func(self)]
         for _, node in self.children.items():
-            ret.extend(node.do(func))
+            ret.extend(node.apply(func))
         return ret
 
     def bfs_tracker(self):
@@ -200,7 +200,7 @@ class _Tree:
         return any(self.perform(lambda node: obj in node))
 
     def perform(self, func):
-        return self.root.do(func)
+        return self.root.apply(func)
 
     def get_node(self, tar, mode='name'):
         r"""

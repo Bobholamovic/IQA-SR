@@ -15,33 +15,34 @@ class IQALoss(nn.Module):
         self.iqa_model = IQANet(weighted=False)
         self.iqa_model.load_state_dict(torch.load(path_to_model_weight)['state_dict'])
 
-        # Freeze the parameters
-        for p in self.iqa_model.parameters():
-            p.requires_grad = False
-
         self.patch_size = patch_size
         self.feat_names = feat_names
         self._denorm = get_dataset(DATASET).denormalize
 
     def forward(self, output, target):
-        output = self._renormalize(output)
-        target = self._renormalize(target)
-        output_patches = self._extract_patches(output)
-        target_patches = self._extract_patches(target)
+        self.iqa_model.eval()   # Switch to eval
+        rets = self.iqa_forward(output, target)
 
-        self.iqa_model.eval()
-        rets = self.iqa_model(output_patches, target_patches)
-        
         sel_feats = [v for k,v in rets.features.items() if k in self.feat_names]
 
         for i, f in enumerate(sel_feats):
             if isinstance(f, tuple):
                 assert len(f) == 2
-                sel_feats[i] = F.mse_loss(*f)
+                # Looks like that F.mse_loss gives unexpected values when
+                # the target requires grad
+                sel_feats[i] = F.mse_loss(f[0], f[1].detach())
             else:
                 sel_feats[i] = torch.mean(torch.abs(f))
 
         return torch.stack(sel_feats, dim=0)
+
+    def iqa_forward(self, output, target):
+        output = self._renormalize(output)
+        target = self._renormalize(target)
+        output_patches = self._extract_patches(output)
+        target_patches = self._extract_patches(target)
+
+        return self.iqa_model(output_patches, target_patches)
         
     def _extract_patches(self, img):
         h, w = img.shape[-2:]
@@ -57,6 +58,11 @@ class IQALoss(nn.Module):
     def _renormalize(self, img):
         return self._denorm(img, 'hr')/255.0
 
+    def freeze(self):
+        # Freeze the parameters
+        for p in self.iqa_model.parameters():
+            p.requires_grad = False
+
 
 class ComLoss(nn.Module):
     def __init__(
@@ -66,15 +72,15 @@ class ComLoss(nn.Module):
         super(ComLoss, self).__init__()
 
         if criterion == 'MAE':
-            self._pixel_criterion = F.l1_loss
+            self.pixel_criterion = F.l1_loss
         elif criterion == 'MSE':
-            self._pixel_criterion = F.mse_loss
+            self.pixel_criterion = F.mse_loss
         elif criterion == 'IQA':
-            self._pixel_criterion = self._none
+            self.pixel_criterion = self._none
             assert weights is not None
+        elif hasattr(criterion, '__call__'):
+            self.pixel_criterion = criterion
         else:
-            if hasattr(criterion, '__call__'):
-                self.criterion = criterion
             raise ValueError('invalid criterion')
             
         self.alpha = alpha
@@ -84,13 +90,13 @@ class ComLoss(nn.Module):
             self.weights = torch.FloatTensor(weights)
             if torch.cuda.is_available(): self.weights = self.weights.cuda()
             self.iqa_loss = IQALoss(model_path, patch_size, feat_names)
-            self._feat_criterion = self._calc_feat_loss
+            self.feat_criterion = self._calc_feat_loss
         else:
-            self._feat_criterion = self._none
+            self.feat_criterion = self._none
 
     def forward(self, output, target):
-        pixel_loss = self._pixel_criterion(output, target)
-        feat_loss = self._feat_criterion(output, target)
+        pixel_loss = self.pixel_criterion(output, target)
+        feat_loss = self.feat_criterion(output, target)
 
         total_loss = self.alpha*pixel_loss + feat_loss
 

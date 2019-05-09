@@ -7,7 +7,7 @@ from time import localtime
 from os.path import join, basename, exists
 from pdb import set_trace as db
 
-from core.trainer import SRTrainer
+from core.trainer import SRTrainer, GANTrainer
 from core.predictor import SRPredictor
 from utils.misc import OutPathGetter
 
@@ -80,7 +80,7 @@ def parse_args():
     parser.add_argument('--pause', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
-    parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_n8_p32_d3.pkl')
+    parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_Waterloo.pkl')
     parser.add_argument('--trace-freq', type=int, default=50)
     parser.add_argument('--reproduce', type=int, default=1)
     parser.add_argument('--alpha', type=float, default=1.0, help='weighting coefficient of pixel loss')
@@ -113,7 +113,7 @@ def main():
     args = parse_args()
 
     if args.cmd == 'train':
-        solver = SRTrainer(args)
+        solver = GANTrainer(args)   # SRTrainer(args)
         solver.train()
     elif args.cmd == 'val':
         solver = SRTrainer(args)

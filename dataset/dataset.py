@@ -167,17 +167,7 @@ class SRDataset(torch.utils.data.Dataset):
 class WaterlooDataset(SRDataset):
     _mean = np.asarray([124.46190829, 115.98740693, 104.40056142])
     _std = np.asarray([63.25935824, 61.56368587, 63.60759291])
-
-    def __init__(
-        self, data_dir, phase, scale, subset='test', 
-        list_dir='', transform=None, repeats=1
-    ):
-        super().__init__(
-            data_dir, phase, scale, subset=subset, 
-            list_dir=list_dir, transform=transform, 
-            repeats=repeats
-        )
-
+    
     @classmethod
     def normalize(cls, x, mode='lr'):
         x_norm = x/255.0
@@ -194,16 +184,6 @@ class WaterlooDataset(SRDataset):
 class DIV2KDataset(SRDataset):
     _mean = 255.0 * np.asarray([0.4488, 0.4371, 0.4040])
     _std = np.asarray([1.0, 1.0, 1.0])#*127.5
-
-    def __init__(
-        self, data_dir, phase, scale, subset='test', 
-        list_dir='', transform=None, repeats=1
-    ):
-        super().__init__(
-            data_dir, phase, scale, subset=subset, 
-            list_dir=list_dir, transform=transform, 
-            repeats=repeats
-        )
 
     @classmethod
     def normalize(cls, x, mode='lr'):

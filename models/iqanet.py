@@ -97,7 +97,7 @@ class IQANet(nn.Module):
         self.fl3 = DoubleConv(64, 128)
 
         # Fusion layers
-        self.cl1 = SingleConv(384, 128)
+        self.cl1 = SingleConv(128*3, 128)
         self.cl2 = nn.Conv2d(128, 64, kernel_size=2)
 
         # Regression layers

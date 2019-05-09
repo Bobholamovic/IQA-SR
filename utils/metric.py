@@ -22,7 +22,7 @@ class Metric(object):
         self.val = 0.0
         self.avg = 0.0
         self.sum = 0.0
-        self.count = 0.0
+        self.count = 0
 
     def update(self, *args, n=1):
         if not self._check_type(args):
@@ -62,9 +62,9 @@ class FRIQA(DualMetric):
         flag_type = arr.dtype == np.uint8
         return flag_dim & flag_type
 
-    def compute(self, *rgb_pair):
+    def compute(self, true, test):
         # Compute the metric only on Y channel
-        y_pair = [color.rgb2gray(rgb) for rgb in rgb_pair]
+        y_pair = color.rgb2gray(true), color.rgb2gray(test)
         return self._compute(*y_pair)
 
     def _compute(self, true, test):

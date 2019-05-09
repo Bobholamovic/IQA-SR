@@ -11,7 +11,8 @@ from dataset.augmentation import Compose, MSCrop, Flip
 from utils.metric import ShavedPSNR, ShavedSSIM, Metric
 from utils.loss import ComLoss
 from utils.misc import Logger
-from models.sr_models.factory import build_model
+from utils.ms_ssim import MS_SSIM
+from models.sr_models import build_model
 
 from constants import (ARCH, DATASET, CKP_BEST, CKP_LATEST, CKP_COUNTED)
 
@@ -243,6 +244,10 @@ class SRTrainer(Trainer):
         # Make sure the criterion is also set to the correct state
         self.criterion.train()
 
+        if hasattr(self.criterion, 'iqa_loss'):
+            # For saving cost
+            self.criterion.iqa_loss.freeze()
+
         for i, (lr, hr) in enumerate(pb):
             # Note that the lr here means low-resolution (images)
             # rather than learning rate
@@ -342,3 +347,104 @@ class SRTrainer(Trainer):
             underline=True
         )
         return io.imsave(out_path, image)
+
+
+class GANTrainer(SRTrainer):
+    def __init__(self, settings):
+        assert hasattr(settings, 'weights')
+        super().__init__(settings)
+        self.discriminator = self.criterion.iqa_loss
+        ## Hard coding here
+        self.discr_optim = torch.optim.Adam(
+            self.discriminator.parameters(), 
+            betas=(0.9, 0.999), 
+            lr=1e-4, 
+            weight_decay=1e-4
+        )
+        self.discr_critn = MS_SSIM()
+        # Do not require gradients
+        for p in self.discr_critn.parameters():
+            p.requires_grad = False
+
+    def train_epoch(self):
+        losses = Metric()
+        pixel_loss = Metric()
+        feat_loss = Metric()
+        discr_loss = Metric()
+        len_train = len(self.train_loader)
+        pb = tqdm(self.train_loader)
+        
+        self.model.train()
+        # Make sure the criterion is also set to the correct state
+        self.criterion.train()
+
+        for i, (lr, hr) in enumerate(pb):
+            # Note that the lr here means low-resolution (images)
+            # rather than learning rate
+            lr = lr.view(-1, *lr.shape[-3:]).cuda()
+            hr = hr.view(-1, *hr.shape[-3:]).cuda()
+            sr = self.model(lr)
+            
+            # Train the IQA model
+            dl = self.discr_learn(hr, hr, 0.0)   # Good-quality images
+            dl += self.discr_learn(sr.detach(), hr) # Bad-quality images
+            dl /= 2
+
+            # Train the SR model
+            # Note that the gradients of the IQANet parameters are
+            # of no use during this stage such that set requires_grad=False
+            # would save some memory, yet still not done.
+            loss, pl, fl = self.criterion(sr, hr)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            # Update data
+            losses.update(loss.data, n=self.batch_size)
+            pixel_loss.update(pl.data, n=self.batch_size)
+            feat_loss.update(fl.data, n=self.batch_size)
+            discr_loss.update(dl, n=self.batch_size)
+
+            # Log for this mini-batch
+            desc = "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
+                    "DL {discr.val:.4f} ({discr.avg:.4f}) " \
+                    "PL {pixel.val:.4f} ({pixel.avg:.4f}) " \
+                    "FL {feat.val:.6f} ({feat.avg:.6f})"\
+                .format(i+1, len_train, loss=losses, 
+                        discr=discr_loss, 
+                        pixel=pixel_loss, feat=feat_loss)
+            pb.set_description(desc)
+            self.logger.dump(desc)
+
+    def discr_learn(self, output, target, score=None):
+        score_o = self.discriminator.iqa_forward(output, target).score
+        bs = target.size(0)  # Batch size
+        if score is not None:
+            score_t = torch.FloatTensor(score) if isinstance(score, tuple) \
+                else torch.FloatTensor([score]*bs)
+            score_t = score_t.type_as(target)
+        else:
+            output = self.dataset.denormalize(output.data, 'hr')
+            target = self.dataset.denormalize(target.data, 'hr')
+            # # Ensure that the criterion is on the eval mode
+            # self.discr_critn.eval()
+
+            # This looks weird and I wonder if there's something like 
+            # apply_along_axis in pytorch to handle this loop
+            chunks = zip(
+                torch.chunk(output, bs, dim=0), 
+                torch.chunk(target, bs, dim=0)
+            )
+            score_t = torch.stack([
+                (1.0-self.discr_critn(o, t))*100
+                for o, t 
+                in chunks
+            ])
+
+        assert score_o.shape == score_t.shape
+        loss = torch.nn.functional.l1_loss(score_o, score_t)
+        self.discr_optim.zero_grad()
+        loss.backward()
+        self.discr_optim.step()
+
+        return loss.data    # Since the gradients are no longer needed

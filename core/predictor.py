@@ -6,7 +6,7 @@ from tqdm import tqdm
 from skimage import io
 from dataset.dataset import get_dataset
 from utils.misc import Logger
-from models.sr_models.factory import build_model
+from models.sr_models import build_model
 
 import constants
 
