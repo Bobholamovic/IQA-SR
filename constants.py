@@ -11,6 +11,8 @@ INTERP_ORDER = _INTERP_METHODS['BICUBIC']
 
 # Image postfixes to recognize in a given directory
 IMAGE_POSTFIXES = ['.jpg', '.jpeg',     '.png', '.bmp', '.tif', '.tiff']
+# npz file postfixes
+NPZ_POSTFIXES = ['.npz', '.pt']
 
 # Network architecture
 ARCH = 'EDSR'

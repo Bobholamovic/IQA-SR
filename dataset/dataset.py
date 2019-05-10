@@ -2,7 +2,10 @@ import torch
 import torch.utils.data
 import numpy as np
 
-from .common import (default_loader, to_float_tensor as to_tensor, to_array, mod_crop)
+from .common import (
+    default_loader, npz_loader, is_img, is_npz, 
+    to_float_tensor as to_tensor, to_array, mod_crop
+)
 from .augmentation import Scale
 from constants import IMAGE_LIST_PATTERN, LR_LIST_PATTERN
 
@@ -89,27 +92,30 @@ class SRDataset(torch.utils.data.Dataset):
         else:
             # Handle a directory
             from glob import glob
-            from constants import IMAGE_POSTFIXES as IPF
             file_list = glob(join(self.data_dir, '*'))
 
-            def isimg(fn):
-                for ipf in IPF:
-                    if fn.endswith(ipf): 
-                        return True
-                return False
-            self.image_list = [f for f in file_list if isimg(f)]
+            self.image_list = [f for f in file_list if is_img(f)]
             # assert len(self.image_list) > 0
 
         self.num = len(self.image_list)
+
+    def load(self, pth):
+        if is_img(pth):
+            loader = default_loader
+        elif is_npz(pth):
+            loader = npz_loader
+        else:
+            raise ValueError('no applicable loader for this type')
+        return loader(pth)
 
     def _make_lr(self, hr):
         return self.scaler(hr)
 
     def _fetch_lr(self, index):
-        return default_loader(self.lr_list[index])
+        return self.load(self.lr_list[index])
 
     def _fetch_hr(self, index):
-        return default_loader(self.image_list[index])
+        return self.load(self.image_list[index])
 
     @staticmethod
     def _read_single_list(pth):

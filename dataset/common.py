@@ -3,7 +3,19 @@ from skimage import transform, io, color
 import torch
 
 from constants import INTERP_ORDER, GAUSSIAN_BLUR
+from constants import IMAGE_POSTFIXES as IPF, NPZ_POSTFIXES as NPF
 
+def is_img(pth):
+    for ipf in IPF:
+        if pth.endswith(ipf): 
+            return True
+    return False
+
+def is_npz(pth):
+    for npf in NPF:
+        if pth.endswith(npf): 
+            return True
+    return False
 
 def mod_crop(x, N):
     h, w = x.shape[:2]
@@ -22,7 +34,11 @@ def default_loader(pth):
     return arr.astype(np.float)
 
 def npz_loader(pth):
-    pass
+    arr = np.load(pth)
+    if arr.ndim == 2:
+        arr = color.gray2rgb(arr)
+    assert arr.ndim == 3 and arr.shape[-1] == 3
+    return arr.astype(np.float)
 
 def to_tensor(x):
     return torch.from_numpy(np.moveaxis(x, -1, -3))
