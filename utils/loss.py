@@ -37,8 +37,8 @@ class IQALoss(nn.Module):
         return torch.stack(sel_feats, dim=0)
 
     def iqa_forward(self, output, target):
-        output = self._renormalize(output)
-        target = self._renormalize(target)
+        output = self.renormalize(output)
+        target = self.renormalize(target)
         output_patches = self._extract_patches(output)
         target_patches = self._extract_patches(target)
 
@@ -55,8 +55,9 @@ class IQALoss(nn.Module):
 
         return patchs
 
-    def _renormalize(self, img):
-        return self._denorm(img, 'hr')/255.0
+    def renormalize(self, img):
+        # Clamp to [0, 255] before normalizing
+        return torch.clamp(self._denorm(img, 'hr'), 0, 255)/255.0
 
     def freeze(self):
         # Freeze the parameters

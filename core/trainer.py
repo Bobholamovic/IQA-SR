@@ -368,7 +368,7 @@ class GANTrainer(SRTrainer):
             lr=1e-4, 
             weight_decay=1e-4
         )
-        self.discr_critn = MS_SSIM()
+        self.discr_critn = MS_SSIM(max_val=1.0)
         # Do not require gradients
         for p in self.discr_critn.parameters():
             p.requires_grad = False
@@ -431,9 +431,8 @@ class GANTrainer(SRTrainer):
                 else torch.FloatTensor([score]*bs)
             score_t = score_t.type_as(target)
         else:
-            # Clamp the output to avoid nans from ms-ssim
-            output = self.dataset.denormalize(torch.clamp(output.data, 0, 255), 'hr')
-            target = self.dataset.denormalize(target.data, 'hr')
+            output = self.discriminator.renormalize(output.data)
+            target = self.discriminator.renormalize(target.data)
             # # Ensure that the criterion is on the eval mode
             # self.discr_critn.eval()
 
