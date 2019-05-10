@@ -24,7 +24,10 @@ LR_LIST_PATTERN = "{ph!s}_list_lr.txt"
 # Checkpoint patterns
 CKP_LATEST = "checkpoint_latest_{}_{}".format(ARCH, DATASET)+"_x{s}.pkl"
 CKP_BEST = "model_best_{}_{}".format(ARCH, DATASET)+"_x{s}.pkl"
-CKP_COUNTED = "checkpoint_{e:03d}"+"_{}_{}".format(ARCH, DATASET)+"_x{s}.pkl" 
+CKP_COUNTED = "checkpoint_{e:03d}"+"_{}_{}".format(ARCH, DATASET)+"_x{s}.pkl"
+CKP_DISCR_LATEST = "ckp_iqa_latest_{}_{}".format(ARCH, DATASET)+"_x{s}.pkl"
+CKP_DISCR_BEST = "ckp_iqa_best_{}_{}".format(ARCH, DATASET)+"_x{s}.pkl"
+CKP_DISCR_COUNTED = "ckp_iqa_{e:03d}"+"_{}_{}".format(ARCH, DATASET)+"_x{s}.pkl"
 
 # Phases
 # To be added

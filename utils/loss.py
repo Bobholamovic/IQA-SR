@@ -63,6 +63,15 @@ class IQALoss(nn.Module):
         for p in self.iqa_model.parameters():
             p.requires_grad = False
 
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        return self.iqa_model.state_dict(self, destination, prefix, keep_vars)
+
+    def load_state_dict(self, state_dict, strict=True):
+        return self.iqa_model.load_state_dict(state_dict, strict)
+
+    def parameters(self):
+        return self.iqa_model.parameters()
+
 
 class ComLoss(nn.Module):
     def __init__(

@@ -14,7 +14,11 @@ from utils.misc import Logger
 from utils.ms_ssim import MS_SSIM
 from models.sr_models import build_model
 
-from constants import (ARCH, DATASET, CKP_BEST, CKP_LATEST, CKP_COUNTED)
+from constants import ARCH, DATASET
+from constants import (
+    CKP_BEST, CKP_LATEST, CKP_COUNTED, 
+    CKP_DISCR_BEST, CKP_DISCR_LATEST, CKP_DISCR_COUNTED
+)
 
 
 class Trainer:
@@ -274,6 +278,7 @@ class SRTrainer(Trainer):
             self.logger.dump(desc)
 
     def validate_epoch(self, epoch=0, store=False):
+        self.logger.show_nl("Epoch: [{0}]".format(epoch))
         losses = Metric(self.criterion)
         ssim = ShavedSSIM(self.scale)
         psnr = ShavedPSNR(self.scale)
@@ -448,3 +453,31 @@ class GANTrainer(SRTrainer):
         self.discr_optim.step()
 
         return loss.data    # Since the gradients are no longer needed
+
+    def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
+        # Save the generator checkpoint first
+        super()._save_checkpoint(state_dict, max_acc, epoch, is_best)
+        # Save latest discriminator checkpoint
+        state = {
+            'epoch': epoch,
+            'state_dict': self.discriminator.state_dict()
+        } 
+        # Save history
+        history_path = self.path('weight', CKP_DISCR_COUNTED.format(
+                                e=epoch, s=self.scale
+                                ), underline=True)
+        if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
+            torch.save(state, history_path)
+        # Save latest
+        latest_path = self.path(
+            'weight', CKP_DISCR_LATEST.format(s=self.scale), 
+            underline=True
+        )
+        torch.save(state, latest_path)
+        if is_best:
+            shutil.copyfile(
+                latest_path, self.path(
+                    'weight', CKP_DISCR_BEST.format(s=self.scale), 
+                    underline=True
+                )
+            )
