@@ -237,6 +237,8 @@ class SRTrainer(Trainer):
                                           weight_decay=settings.weight_decay
                                          )
 
+        self.logger.dump(self.model)    # Log the architecture
+
     def train_epoch(self):
         losses = Metric()
         pixel_loss = Metric()
@@ -429,7 +431,8 @@ class GANTrainer(SRTrainer):
                 else torch.FloatTensor([score]*bs)
             score_t = score_t.type_as(target)
         else:
-            output = self.dataset.denormalize(output.data, 'hr')
+            # Clamp the output to avoid nans from ms-ssim
+            output = self.dataset.denormalize(torch.clamp(output.data, 0, 255), 'hr')
             target = self.dataset.denormalize(target.data, 'hr')
             # # Ensure that the criterion is on the eval mode
             # self.discr_critn.eval()
