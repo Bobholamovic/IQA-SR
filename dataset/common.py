@@ -21,6 +21,9 @@ def default_loader(pth):
     # uint8 -> double
     return arr.astype(np.float)
 
+def npz_loader(pth):
+    pass
+
 def to_tensor(x):
     return torch.from_numpy(np.moveaxis(x, -1, -3))
 
