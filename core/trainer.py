@@ -34,7 +34,7 @@ class Trainer:
         self.num_epochs = settings.num_epochs
         self.lr = settings.lr
         self.save = settings.save_on
-        self.from_pause = self.settings.pause
+        self.from_pause = self.settings.continu
         self.path_ctrl = settings.global_path
         self.path = self.path_ctrl.get_path
 
@@ -205,6 +205,9 @@ class SRTrainer(Trainer):
             settings.iqa_patch_size, 
             settings.criterion
         )
+        if hasattr(self.criterion, 'iqa_loss'):
+            # For saving cost
+            self.criterion.iqa_loss.freeze()
 
         self.model = build_model(ARCH, scale=self.scale)
         self.dataset = get_dataset(DATASET)
@@ -219,7 +222,7 @@ class SRTrainer(Trainer):
                         Flip()
                     ), 
                     repeats=settings.reproduce), 
-                batch_size=self.batch_size//settings.reproduce, 
+                batch_size=self.batch_size, #max(self.batch_size//settings.reproduce, 1),
                 shuffle=True, 
                 num_workers=settings.num_workers, 
                 pin_memory=True, drop_last=True
@@ -250,15 +253,10 @@ class SRTrainer(Trainer):
         # Make sure the criterion is also set to the correct state
         self.criterion.train()
 
-        if hasattr(self.criterion, 'iqa_loss'):
-            # For saving cost
-            self.criterion.iqa_loss.freeze()
-
         for i, (lr, hr) in enumerate(pb):
             # Note that the lr here means low-resolution (images)
             # rather than learning rate
-            lr = lr.view(-1, *lr.shape[-3:]).cuda()
-            hr = hr.view(-1, *hr.shape[-3:]).cuda()
+            lr, hr = lr.cuda(), hr.cuda()
             sr = self.model(lr)
             
             loss, pl, fl = self.criterion(sr, hr)
@@ -388,14 +386,16 @@ class GANTrainer(SRTrainer):
         for i, (lr, hr) in enumerate(pb):
             # Note that the lr here means low-resolution (images)
             # rather than learning rate
-            lr = lr.view(-1, *lr.shape[-3:]).cuda()
-            hr = hr.view(-1, *hr.shape[-3:]).cuda()
+            lr, hr = lr.cuda(), hr.cuda()
             sr = self.model(lr)
             
-            # Train the IQA model
-            dl = self.discr_learn(hr, hr, 0.0)   # Good-quality images
-            dl += self.discr_learn(sr.detach(), hr) # Bad-quality images
-            dl /= 2
+            if i % 100 == 0:
+                with self.criterion.iqa_loss.learner():
+                    # Train the IQA model
+                    dl = self.discr_learn(hr, hr, 0.0)   # Good-quality images
+                    dl += self.discr_learn(sr.detach(), hr) # Bad-quality images
+                    dl /= 2
+                    discr_loss.update(dl, n=self.batch_size)
 
             # Train the SR model
             # Note that the gradients of the IQANet parameters are
@@ -410,7 +410,6 @@ class GANTrainer(SRTrainer):
             losses.update(loss.data, n=self.batch_size)
             pixel_loss.update(pl.data, n=self.batch_size)
             feat_loss.update(fl.data, n=self.batch_size)
-            discr_loss.update(dl, n=self.batch_size)
 
             # Log for this mini-batch
             desc = "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \

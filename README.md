@@ -9,3 +9,4 @@ Quality Guided Single Image Super-Resolution
 - [ ] dump error logs
 - [ ] ~~design a tree with all descendants in a single dictionary and bind the dict with OutPathGetter._keys~~
 - [x] load data from `npz` files
+- [ ] non-default arguments still take effect even when exp-config is set

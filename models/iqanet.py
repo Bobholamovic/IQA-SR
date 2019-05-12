@@ -1,5 +1,5 @@
 import math
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import torch
 import torch.nn as nn
 
@@ -89,7 +89,7 @@ class IQANet(nn.Module):
         super(IQANet, self).__init__()
 
         self.weighted = weighted
-        self.features = dict()
+        self.features = OrderedDict()
 
         # Feature extraction layers
         self.fl1 = DoubleConv(3, 32)

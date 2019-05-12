@@ -27,6 +27,8 @@ def read_config(config_path):
 def parse_config(cfg_name, cfg):
     # Parse feats
     if cfg.__contains__('feats'):
+        # The feature names are stored in sequential along with their weights.
+        # What is to be done here is to separate them into two tuples
         feat_names, weights = zip(*(tuple(*f.items()) for f in cfg['feats']))
         del cfg['feats']
         cfg = {**cfg, 'feat_names': feat_names, 'weights': weights}
@@ -77,7 +79,7 @@ def parse_args():
     parser.add_argument('--suffix-off', action='store_true')
     parser.add_argument('--anew', action='store_true',
                         help='clear history and start from epoch 0 with the checkpoint loaded')
-    parser.add_argument('--pause', action='store_true')
+    parser.add_argument('--continu', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
     parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_Waterloo.pkl')

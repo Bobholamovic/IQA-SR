@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from contextlib import contextmanager
 
 from models.iqanet import IQANet
 from dataset.dataset import get_dataset
@@ -23,7 +24,10 @@ class IQALoss(nn.Module):
         self.iqa_model.eval()   # Switch to eval
         rets = self.iqa_forward(output, target)
 
-        sel_feats = [v for k,v in rets.features.items() if k in self.feat_names]
+        sel_feats = []
+        # The features are fetched and stored in the order of feat_names
+        for k in self.feat_names:
+            sel_feats.append(rets.features.__getitem__(k))
 
         for i, f in enumerate(sel_feats):
             if isinstance(f, tuple):
@@ -64,6 +68,11 @@ class IQALoss(nn.Module):
         for p in self.iqa_model.parameters():
             p.requires_grad = False
 
+    def unfreeze(self):
+        # Freeze the parameters
+        for p in self.iqa_model.parameters():
+            p.requires_grad = True
+
     def state_dict(self, destination=None, prefix='', keep_vars=False):
         return self.iqa_model.state_dict(destination, prefix, keep_vars)
 
@@ -72,6 +81,12 @@ class IQALoss(nn.Module):
 
     def parameters(self):
         return self.iqa_model.parameters()
+
+    @contextmanager
+    def learner(self):
+        self.unfreeze()
+        yield self.iqa_model
+        self.freeze()
 
 
 class ComLoss(nn.Module):

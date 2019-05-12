@@ -34,7 +34,10 @@ def default_loader(pth):
     return arr.astype(np.float)
 
 def npz_loader(pth):
-    arr = np.load(pth)
+    # arr = np.load(pth)
+    import pickle
+    with open(pth, 'rb') as _f:
+        arr = pickle.load(_f)
     if arr.ndim == 2:
         arr = color.gray2rgb(arr)
     assert arr.ndim == 3 and arr.shape[-1] == 3

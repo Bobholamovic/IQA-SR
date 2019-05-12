@@ -26,14 +26,13 @@ class SRDataset(torch.utils.data.Dataset):
         self.subset = subset if phase == 'val' else phase
         self.scale = scale
         self.scaler = Scale(1.0/scale)
-        # Multi-out-of-single to save IO costs
-        # i.e. to reproduce training data from one sample
-        # by applying repeating random transformation
-        self.repeats = repeats if self.transform is not None else 1 
+        self.repeats = repeats
 
         self._read_lists()
 
     def __getitem__(self, index):
+        if self.num > 0: index %= self.num
+
         name = self._get_name(index)
         hr_img = self._fetch_hr(index)
 
@@ -52,17 +51,7 @@ class SRDataset(torch.utils.data.Dataset):
                 lr_img = self._make_lr(hr_img)
 
             if self.transform is not None:
-                if self.repeats > 1:
-                    hr_list, lr_list = [], []
-                    for r in range(self.repeats):
-                        # lr first and then hr in case of MSCrop
-                        lr_r, hr_r = self.transform(lr_img, hr_img)
-                        lr_list.append(lr_r)
-                        hr_list.append(hr_r)
-                    lr_img = np.stack(lr_list, axis=0)
-                    hr_img = np.stack(hr_list, axis=0)
-                else:
-                    lr_img, hr_img = self.transform(lr_img, hr_img)
+                lr_img, hr_img = self.transform(lr_img, hr_img)
 
             lr_tensor = self.to_tensor_lr(lr_img)
             hr_tensor = self.to_tensor_hr(hr_img)
@@ -75,7 +64,7 @@ class SRDataset(torch.utils.data.Dataset):
                 raise ValueError('invalid phase')
 
     def __len__(self):
-        return self.num
+        return self.num * self.repeats
         
     def _read_lists(self):
         assert isdir(self.list_dir)
@@ -102,7 +91,7 @@ class SRDataset(torch.utils.data.Dataset):
     def load(self, pth):
         return default_loader(pth)
         # Block it for the moment as 
-        # the if...else wastes time in most cases
+        # the if-else wastes time in most cases
         if is_img(pth):
             loader = default_loader
         elif is_npz(pth):
