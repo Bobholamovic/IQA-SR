@@ -239,6 +239,12 @@ class SRTrainer(Trainer):
                                           lr=self.lr, 
                                           weight_decay=settings.weight_decay
                                          )
+        # self.optimizer = torch.optim.RMSprop(
+        #     self.model.parameters(),
+        #     lr=self.lr,
+        #     alpha=0.9,
+        #     weight_decay=settings.weight_decay
+        # )
 
         self.logger.dump(self.model)    # Log the architecture
 
@@ -389,7 +395,7 @@ class GANTrainer(SRTrainer):
             lr, hr = lr.cuda(), hr.cuda()
             sr = self.model(lr)
             
-            if i % 100 == 0:
+            if i % 1 == 0:
                 with self.criterion.iqa_loss.learner():
                     # Train the IQA model
                     dl = self.discr_learn(hr, hr, 0.0)   # Good-quality images
@@ -398,12 +404,10 @@ class GANTrainer(SRTrainer):
                     discr_loss.update(dl, n=self.batch_size)
 
             # Train the SR model
-            # Note that the gradients of the IQANet parameters are
-            # of no use during this stage such that set requires_grad=False
-            # would save some memory, yet still not done.
             loss, pl, fl = self.criterion(sr, hr)
             self.optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_value_(self.model.parameters(), 0.1)
             self.optimizer.step()
 
             # Update data
@@ -449,6 +453,7 @@ class GANTrainer(SRTrainer):
 
         assert score_o.shape == score_t.shape
         loss = torch.nn.functional.l1_loss(score_o, score_t)
+
         self.discr_optim.zero_grad()
         loss.backward()
         self.discr_optim.step()
