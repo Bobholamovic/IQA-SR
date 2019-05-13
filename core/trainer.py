@@ -351,7 +351,7 @@ class SRTrainer(Trainer):
         
     def save_image(self, file_name, image, epoch):
         file_path = os.path.join(
-            'epoch_{}/x{}/'.format(epoch, self.scale),
+            'x{}/epoch_{}/'.format(self.scale, epoch),
             self.settings.out_dir,
             file_name
         )

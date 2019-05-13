@@ -51,7 +51,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('cmd', choices=['train', 'val', 'test'])
     parser.add_argument('-d', '--data-dir', default='/home/gdf/Datasets/DIV2K/')
-    parser.add_argument('-l', '--list-dir', default='/home/gdf/Datasets/DIV2K/lists/X2/')
+    parser.add_argument('-l', '--list-dir', default='/home/gdf/Datasets/DIV2K/lists/X4/')
     parser.add_argument('-o', '--out-dir', default='')
     parser.add_argument('-p', '--patch-size', type=int, default=256, metavar='P', 
                         help='patch size (default: 64)')
