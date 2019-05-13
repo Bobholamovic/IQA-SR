@@ -255,11 +255,11 @@ class _Tree:
 class OutPathGetter:
     def __init__(self, root='', log='logs', out='outs', weight='weights', suffix='', **subs):
         super().__init__()
-        self._root = root
+        self._root = root.rstrip('/')    # Work robustly for multiple ending '/'s
         self._suffix = suffix
         self._keys = dict(log=log, out=out, weight=weight, **subs)
         self._dir_tree = _Tree(
-            root, 'root',
+            self._root, 'root',
             strc_ele=dict(zip(self._keys.values(), self._keys.keys())),
             sep='/', 
             def_val=''

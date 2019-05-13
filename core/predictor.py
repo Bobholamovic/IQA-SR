@@ -89,9 +89,10 @@ class SRPredictor(Predictor):
         self.dataset = get_dataset(constants.DATASET)
 
         self.test_loader = self.dataset(
-            self.data_dir, 'test',
-            self.scale,
-            list_dir=self.list_dir)
+            self.data_dir, 'test', 
+            self.scale, 
+            list_dir=self.list_dir
+        )
 
     def test_epoch(self):
         len_test = len(self.test_loader)

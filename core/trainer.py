@@ -33,7 +33,7 @@ class Trainer:
         self.load_checkpoint = (len(self.checkpoint)>0)
         self.num_epochs = settings.num_epochs
         self.lr = settings.lr
-        self.save = settings.save_on
+        self.save = settings.save_on or settings.out_dir
         self.from_pause = self.settings.continu
         self.path_ctrl = settings.global_path
         self.path = self.path_ctrl.get_path
@@ -232,8 +232,12 @@ class SRTrainer(Trainer):
             self.data_dir, 'val', 
             self.scale, 
             subset=settings.subset, 
-            list_dir=self.list_dir)
-       
+            list_dir=self.list_dir
+        )
+            
+        if not self.val_loader.lr_avai:
+            self.logger.warning("warning: the low-resolution sources are not available")
+
         self.optimizer = torch.optim.Adam(self.model.parameters(), 
                                           betas=(0.9,0.999), 
                                           lr=self.lr, 
@@ -347,14 +351,14 @@ class SRTrainer(Trainer):
         
     def save_image(self, file_name, image, epoch):
         file_path = os.path.join(
-            'epoch_{}/x{}/'.format(epoch, self.scale), 
-            self.settings.out_dir, 
+            'epoch_{}/x{}/'.format(epoch, self.scale),
+            self.settings.out_dir,
             file_name
         )
         out_path = self.path(
-            'out', file_path, 
-            suffix=not self.settings.suffix_off, 
-            auto_make=True, 
+            'out', file_path,
+            suffix=not self.settings.suffix_off,
+            auto_make=True,
             underline=True
         )
         return io.imsave(out_path, image)

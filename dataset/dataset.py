@@ -31,7 +31,9 @@ class SRDataset(torch.utils.data.Dataset):
         self._read_lists()
 
     def __getitem__(self, index):
-        if self.num > 0: index %= self.num
+        if index >= len(self):
+            raise IndexError()
+        index %= self.num
 
         name = self._get_name(index)
         hr_img = self._fetch_hr(index)
@@ -42,12 +44,11 @@ class SRDataset(torch.utils.data.Dataset):
             # Fetch the large images from {phase}_list.txt
             # or from a folder as the lr inputs. 
             return name, self.to_tensor_lr(hr_img)
-        else: 
+        else:
+            hr_img = mod_crop(hr_img, self.scale)
             if self.lr_avai:
                 lr_img = self._fetch_lr(index)
             else:
-                # Mod-crop hr only when lr is not provided
-                hr_img = mod_crop(hr_img, self.scale)
                 lr_img = self._make_lr(hr_img)
 
             if self.transform is not None:
