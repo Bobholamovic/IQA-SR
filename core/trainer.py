@@ -150,6 +150,8 @@ class Trainer:
             else:
                 self.logger.warning("=> {} params are to be loaded".format(num_to_update))
         elif (not self.settings.anew) or (self.phase != 'train'):
+            # Note in the non-anew mode, it is not guaranteed that the contained field 
+            # max_acc be the corresponding one of the loaded checkpoint.
             self.start_epoch = checkpoint.get('epoch', self.start_epoch)
             self._init_max_acc = checkpoint.get('max_acc', self._init_max_acc)
 
@@ -377,7 +379,7 @@ class GANTrainer(SRTrainer):
             weight_decay=1e-4
         )
         self.discr_critn = MS_SSIM(max_val=1.0)
-        # Do not require gradients
+        # The discriminator criterion does not require gradients
         for p in self.discr_critn.parameters():
             p.requires_grad = False
 

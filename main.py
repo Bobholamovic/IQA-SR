@@ -54,18 +54,18 @@ def parse_args():
     parser.add_argument('-l', '--list-dir', default='/home/gdf/Datasets/DIV2K/lists/X4/')
     parser.add_argument('-o', '--out-dir', default='')
     parser.add_argument('-p', '--patch-size', type=int, default=256, metavar='P', 
-                        help='patch size (default: 64)')
+                        help='patch size (default: %(default)s)')
     parser.add_argument('--exp-dir', default='./exps/')
     parser.add_argument('--step', type=int, default=200)
     parser.add_argument('--batch-size', type=int, default=32, metavar='B',
-                        help='input batch size for training (default: 32)')
+                        help='input batch size for training (default: %(default)s)')
     parser.add_argument('--num-epochs', type=int, default=1000, metavar='NE',
-                        help='number of epochs to train (default: 1000)')
+                        help='number of epochs to train (default: %(default)s)')
     parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
-                        help='learning rate (default: 1e-4)')
+                        help='learning rate (default: %(default)s)')
     parser.add_argument('--lr-mode', type=str, default='const')
     parser.add_argument('--weight-decay', default=1e-4, type=float,
-                        metavar='W', help='weight decay (default: 1e-4)')
+                        metavar='W', help='weight decay (default: %(default)s)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint')
     parser.add_argument('--num-workers', type=int, default=8)

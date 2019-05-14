@@ -43,6 +43,7 @@ class IQALoss(nn.Module):
     def iqa_forward(self, output, target):
         output = self.renormalize(output)
         target = self.renormalize(target)
+        
         output_patches = self._extract_patches(output)
         target_patches = self._extract_patches(target)
 
@@ -122,8 +123,9 @@ class ComLoss(nn.Module):
     def forward(self, output, target):
         pixel_loss = self.pixel_criterion(output, target)
         feat_loss = self.feat_criterion(output, target)
+        tv_loss = self._calc_tv_loss(output)
 
-        total_loss = self.alpha*pixel_loss + feat_loss
+        total_loss = self.alpha*pixel_loss + feat_loss + 1e-3*tv_loss
 
         if self.training:
             return total_loss, pixel_loss, feat_loss
@@ -138,3 +140,16 @@ class ComLoss(nn.Module):
 
     def _none(self, output, target):
         return torch.tensor(0.0).type_as(output)
+
+    def _calc_tv_loss(self, x):
+        # Copied from https://github.com/jxgu1016/Total_Variation_Loss.pytorch/blob/master/TVLoss.py
+        def _tensor_size(t):
+            return t.size()[1]*t.size()[2]*t.size()[3]
+        batch_size = x.size()[0]
+        h_x = x.size()[2]
+        w_x = x.size()[3]
+        count_h = _tensor_size(x[:,:,1:,:])
+        count_w = _tensor_size(x[:,:,:,1:])
+        h_tv = torch.pow((x[:,:,1:,:]-x[:,:,:h_x-1,:]),2).sum()
+        w_tv = torch.pow((x[:,:,:,1:]-x[:,:,:,:w_x-1]),2).sum()
+        return 2*(h_tv/count_h+w_tv/count_w)/batch_size
