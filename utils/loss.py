@@ -122,21 +122,19 @@ class ComLoss(nn.Module):
 
     def forward(self, output, target):
         pixel_loss = self.pixel_criterion(output, target)
+        
+        if not self.training:
+            return pixel_loss
+
         feat_loss = self.feat_criterion(output, target)
         tv_loss = self._calc_tv_loss(output)
 
         total_loss = self.alpha*pixel_loss + feat_loss + 1e-3*tv_loss
 
-        if self.training:
-            return total_loss, pixel_loss, feat_loss
-        else:
-            return total_loss
+        return total_loss, pixel_loss, feat_loss
 
     def _calc_feat_loss(self, output, target):
-        if self.training:
-            return torch.sum(self.weights*self.iqa_loss(output, target))
-        else:
-            return self._none(output, target)
+        return torch.sum(self.weights*self.iqa_loss(output, target))
 
     def _none(self, output, target):
         return torch.tensor(0.0).type_as(output)
