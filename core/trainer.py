@@ -546,6 +546,8 @@ class MTTrainer(Trainer):
 
     def train_epoch(self):
         sr_losses = Metric()
+        pix_losses = Metric()
+        perc_losses = Metric()
         iqa_losses = Metric()
         len_train = len(self.train_loader)
         pb = tqdm(self.train_loader)
@@ -554,33 +556,52 @@ class MTTrainer(Trainer):
 
         for i, (lr, hr) in enumerate(pb):
             lr, hr = lr.cuda(), hr.cuda()
-            sr = self.model(lr)
+
+            # Train IQA branch
+            sr, _ = self.model(lr)
             sr_ng = sr.detach()
-            hr_qm = self.model.iqa_forward(sr_ng)
+            sr_qm = self.model.iqa_forward(sr_ng)
+            hr_qm = self.model.iqa_forward(hr)
             
-            hr_qm_gt = self.gauge_quality_map(torch.clamp(sr_ng, 0.0, 1.0), hr)
-
-            sr_loss = self.criterion(sr, hr)
-            iqa_loss = self.iqa_critn(hr_qm, hr_qm_gt)
-
-            sr_loss += 1.0-hr_qm.mean()
-
-            sr_losses.update(sr_loss.data, n=self.batch_size)
-            iqa_losses.update(iqa_loss.data, n=self.batch_size)
-            
-
-            self.sr_optim.zero_grad()
-            sr_loss.backward(retain_graph=True)
-            self.sr_optim.step()
+            sr_qm_gt = self.gauge_quality_map(torch.clamp(sr_ng, 0.0, 1.0), hr)
+            iqa_loss = (self.iqa_critn(sr_qm, sr_qm_gt) + \
+                        self.iqa_critn(hr_qm, torch.ones_like(hr_qm))) / 2
 
             self.iqa_optim.zero_grad()
             iqa_loss.backward()
             self.iqa_optim.step()
 
-            desc =  "[{}/{}] SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
-                    "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f})"\
+            # Train SR branch
+            sr, lr_qm = self.model(lr)
+            sr_qm = self.model.iqa_forward(sr)
+
+            pix_loss = self.criterion(sr, hr)
+            perc_loss = 1.0 - torch.nn.functional.l1_loss(
+                sr_qm.view(self.batch_size, -1).mean(-1), 
+                lr_qm.detach().view(self.batch_size, -1).mean(-1)
+            )
+
+            sr_loss = pix_loss + 0.2*perc_loss
+
+            self.sr_optim.zero_grad()
+            sr_loss.backward()
+            self.sr_optim.step()
+
+
+            # Update metrics
+            sr_losses.update(sr_loss.data, n=self.batch_size)
+            pix_losses.update(pix_loss.data, n=self.batch_size)
+            perc_losses.update(perc_loss.data, n=self.batch_size)
+            iqa_losses.update(iqa_loss.data, n=self.batch_size)
+
+            desc =  "[{}/{}] SR {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+                    "Pix {pix_loss.val:.4f} ({pix_loss.avg:.4f}) "\
+                    "Perc {perc_loss.val:.4f} ({perc_loss.avg:.4f}) "\
+                    "IQA {iqa_loss.val:.4f} ({iqa_loss.avg:.4f})"\
                 .format(i+1, len_train, 
-                    sr_loss=sr_losses, iqa_loss=iqa_losses)
+                    sr_loss=sr_losses, iqa_loss=iqa_losses,
+                    pix_loss=pix_losses, perc_loss=perc_losses
+                    )
             pb.set_description(desc)
             self.logger.dump(desc)
 
@@ -606,15 +627,17 @@ class MTTrainer(Trainer):
                     
                 lr, hr = lr.unsqueeze(0).cuda(), hr.unsqueeze(0).cuda()
 
-                sr = self.model(lr)
-                hr_qm = self.model.iqa_forward(sr)
+                sr, _ = self.model(lr)
+                sr_qm = self.model.iqa_forward(sr)
+                hr_qm = self.model.iqa_forward(hr)
                 
-                hr_qm_gt = self.gauge_quality_map(sr, hr)
+                sr_qm_gt = self.gauge_quality_map(torch.clamp(sr, 0.0, 1.0), hr)
 
-                sr_loss = self.criterion(sr, hr)
-                iqa_loss = self.iqa_critn(hr_qm, hr_qm_gt)
+                pix_loss = self.criterion(sr, hr)
+                iqa_loss = (self.iqa_critn(sr_qm, sr_qm_gt) + \
+                            self.iqa_critn(hr_qm, torch.ones_like(hr_qm))) / 2
 
-                sr_losses.update(sr_loss)
+                sr_losses.update(pix_loss)
                 iqa_losses.update(iqa_loss)
 
                 lr = to_image(lr.squeeze(0), 'lr')
@@ -624,8 +647,8 @@ class MTTrainer(Trainer):
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)
 
-                desc =  "[{}/{}] SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
-                        "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f}) "\
+                desc =  "[{}/{}] SR {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+                        "IQA {iqa_loss.val:.4f} ({iqa_loss.avg:.4f}) "\
                         "PSNR {psnr.val:.4f} ({psnr.avg:.4f}) " \
                         "SSIM {ssim.val:.4f} ({ssim.avg:.4f})" \
                         .format(i+1, len_val, 

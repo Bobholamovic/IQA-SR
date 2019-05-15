@@ -184,7 +184,7 @@ class MTEDSR(nn.Module):
         res_sr *= iqa_map
         sr_result = self.sr_branch.tail(res_sr)
 
-        return sr_result
+        return sr_result, iqa_map
 
     def iqa_forward(self, x):
         return self.iqa_branch(x)
