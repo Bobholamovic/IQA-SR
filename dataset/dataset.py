@@ -201,6 +201,16 @@ class DIV2KDataset(SRDataset):
             return x*cls._std + cls._mean
 
 
+class MTDataset(SRDataset):
+    @classmethod
+    def normalize(cls, x, mode='lr'):
+        return x/255.0
+
+    @classmethod
+    def denormalize(cls, x, mode='hr'):
+        return x*255.0
+
+
 def get_dataset(name):
     return globals().get(name+'Dataset', None)
 

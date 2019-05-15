@@ -48,6 +48,7 @@ class MS_SSIM(torch.nn.Module):
         mcs_map = V1 / V2
         if size_average:
             return ssim_map.mean(), mcs_map.mean()
+        return ssim_map, mcs_map
 
     def ms_ssim(self, img1, img2, levels=5):
 

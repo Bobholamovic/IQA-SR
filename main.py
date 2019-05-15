@@ -7,7 +7,7 @@ from time import localtime
 from os.path import join, basename, exists
 from pdb import set_trace as db
 
-from core.trainer import SRTrainer, GANTrainer
+from core.trainer import SRTrainer, GANTrainer, MTTrainer
 from core.predictor import SRPredictor
 from utils.misc import OutPathGetter
 
@@ -115,7 +115,7 @@ def main():
     args = parse_args()
 
     if args.cmd == 'train':
-        solver = GANTrainer(args)   # SRTrainer(args)
+        solver = MTTrainer(args)
         solver.train()
     elif args.cmd == 'val':
         solver = SRTrainer(args)

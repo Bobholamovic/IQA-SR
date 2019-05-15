@@ -495,18 +495,14 @@ class GANTrainer(SRTrainer):
             )
 
 class MTTrainer(Trainer):
-    # Mult-task trainer
-    modes = ('IQA', 'SR', 'MT')
-    def __init__(self, settings, mode='MT'):
+    def __init__(self, settings):
         super(MTTrainer, self).__init__(settings)
-        assert mode in MTTrainer.modes
-        self.mode = mode
         self.scale = settings.scale
-        self.sr_critn = torch.nn.L1Loss()
+        self.criterion = torch.nn.L1Loss()
         self.iqa_critn = torch.nn.L1Loss()
 
         self.model = build_model('MT', scale=self.scale)
-        self.dataset = get_dataset(DATASET)
+        self.dataset = get_dataset('MT')
 
         if self.phase == 'train':
             self.train_loader = torch.utils.data.DataLoader(
@@ -548,16 +544,7 @@ class MTTrainer(Trainer):
 
         self.logger.dump(self.model)    # Log the architecture
 
-        # If training a single branch, freeze the other
-        if self.mode == 'IQA':
-            for p in self.model.sr_branch.parameters():
-                p.requires_grad = False
-        elif self.mode == 'SR':
-            for p in self.model.iqa_branch.parameters():
-                p.requires_grad = False
-
     def train_epoch(self):
-        # losses = Metric()
         sr_losses = Metric()
         iqa_losses = Metric()
         len_train = len(self.train_loader)
@@ -567,39 +554,38 @@ class MTTrainer(Trainer):
 
         for i, (lr, hr) in enumerate(pb):
             lr, hr = lr.cuda(), hr.cuda()
-            sr, score = self.model(lr)
+            sr = self.model(lr)
+            sr_ng = sr.detach()
+            hr_qm = self.model.iqa_forward(sr_ng)
             
-            score_gt = self.gauge_quality_map(sr.detach(), hr)
+            hr_qm_gt = self.gauge_quality_map(torch.clamp(sr_ng, 0.0, 1.0), hr)
 
-            sr_loss = self.sr_critn(sr, hr)
-            iqa_loss = self.iqa_critn(score, score_gt)
+            sr_loss = self.criterion(sr, hr)
+            iqa_loss = self.iqa_critn(hr_qm, hr_qm_gt)
 
-            # losses.update(loss.data, n=self.batch_size)
+            sr_loss += hr_qm.mean()
+
             sr_losses.update(sr_loss.data, n=self.batch_size)
             iqa_losses.update(iqa_loss.data, n=self.batch_size)
             
 
-            if self.mode != 'IQA':
-                self.sr_optim.zero_grad()
-                sr_loss.backward()
-                self.sr_optim.step()
+            self.sr_optim.zero_grad()
+            sr_loss.backward(retain_graph=True)
+            self.sr_optim.step()
 
-            if self.mode != 'SR':
-                self.iqa_optim.zero_grad()
-                iqa_loss.backward()
-                self.iqa_optim.step()
+            self.iqa_optim.zero_grad()
+            iqa_loss.backward()
+            self.iqa_optim.step()
 
-            desc = # "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
-                    "SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+            desc =  " SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
                     "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f})"\
-                .format(i+1, len_train, # loss=losses, 
-                    sr_loss=sr_loss, iqa_loss=iqa_loss)
+                .format(i+1, len_train, 
+                    sr_loss=sr_losses, iqa_loss=iqa_losses)
             pb.set_description(desc)
             self.logger.dump(desc)
 
     def validate_epoch(self, epoch=0, store=False):
         self.logger.show_nl("Epoch: [{0}]".format(epoch))
-        # losses = Metric()
         sr_losses = Metric()
         iqa_losses = Metric()
         ssim = ShavedSSIM(self.scale)
@@ -624,10 +610,9 @@ class MTTrainer(Trainer):
                 
                 score_gt = self.gauge_iqa_score(sr, hr)
 
-                sr_loss = self.sr_critn(sr, hr)
+                sr_loss = self.criterion(sr, hr)
                 iqa_loss = self.iqa_critn(score, score_gt)
 
-                # losses.update(loss)
                 sr_losses.update(sr_loss)
                 iqa_losses.update(iqa_loss)
 
@@ -638,13 +623,12 @@ class MTTrainer(Trainer):
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)
 
-                desc = # "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
-                        "SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
-                        "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f})"\
+                desc =  "SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+                        "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f}) "\
                         "PSNR {psnr.val:.4f} ({psnr.avg:.4f}) " \
                         "SSIM {ssim.val:.4f} ({ssim.avg:.4f})" \
-                        .format(i+1, len_val, # loss=losses,
-                                sr_loss=sr_loss, 
+                        .format(i+1, len_val, 
+                                sr_loss=sr_losseses, 
                                 iqa_loss=iqa_loss,
                                 psnr=psnr, ssim=ssim)
 
@@ -678,4 +662,4 @@ class MTTrainer(Trainer):
         return io.imsave(out_path, image)
 
     def gauge_quality_map(self, x1, x2):
-        return self.iqa_metric._ssim(x1, x2, size_average=False)
+        return self.iqa_metric._ssim(x1, x2, size_average=False)[0].mean(dim=1, keepdim=True)
