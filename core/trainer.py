@@ -493,3 +493,189 @@ class GANTrainer(SRTrainer):
                     underline=True
                 )
             )
+
+class MTTrainer(Trainer):
+    # Mult-task trainer
+    modes = ('IQA', 'SR', 'MT')
+    def __init__(self, settings, mode='MT'):
+        super(MTTrainer, self).__init__(settings)
+        assert mode in MTTrainer.modes
+        self.mode = mode
+        self.scale = settings.scale
+        self.sr_critn = torch.nn.L1Loss()
+        self.iqa_critn = torch.nn.L1Loss()
+
+        self.model = build_model('MT', scale=self.scale)
+        self.dataset = get_dataset(DATASET)
+
+        if self.phase == 'train':
+            self.train_loader = torch.utils.data.DataLoader(
+                self.dataset(
+                    self.data_dir, 'train', self.scale, 
+                    list_dir=self.list_dir, 
+                    transform=Compose(
+                        MSCrop(self.scale, settings.patch_size), 
+                        Flip()
+                    ), 
+                    repeats=settings.reproduce), 
+                batch_size=self.batch_size,
+                shuffle=True, 
+                num_workers=settings.num_workers, 
+                pin_memory=True, drop_last=True
+                )
+
+        self.val_loader = self.dataset(
+            self.data_dir, 'val', 
+            self.scale, 
+            subset=settings.subset, 
+            list_dir=self.list_dir
+        )
+            
+        if not self.val_loader.lr_avai:
+            self.logger.warning("warning: the low-resolution sources are not available")
+
+        self.sr_optim = torch.optim.Adam(self.model.sr_branch.parameters(), 
+                                          betas=(0.9,0.999), 
+                                          lr=self.lr, 
+                                          weight_decay=settings.weight_decay
+                                         )
+        self.iqa_optim = torch.optim.Adam(self.model.iqa_branch.parameters(), 
+                                          betas=(0.9,0.999), 
+                                          lr=self.lr, 
+                                          weight_decay=settings.weight_decay
+                                         )
+        self.iqa_metric = MS_SSIM(max_val=1.0)
+
+        self.logger.dump(self.model)    # Log the architecture
+
+        # If training a single branch, freeze the other
+        if self.mode == 'IQA':
+            for p in self.model.sr_branch.parameters():
+                p.requires_grad = False
+        elif self.mode == 'SR':
+            for p in self.model.iqa_branch.parameters():
+                p.requires_grad = False
+
+    def train_epoch(self):
+        # losses = Metric()
+        sr_losses = Metric()
+        iqa_losses = Metric()
+        len_train = len(self.train_loader)
+        pb = tqdm(self.train_loader)
+        
+        self.model.train()
+
+        for i, (lr, hr) in enumerate(pb):
+            lr, hr = lr.cuda(), hr.cuda()
+            sr, score = self.model(lr)
+            
+            score_gt = self.gauge_quality_map(sr.detach(), hr)
+
+            sr_loss = self.sr_critn(sr, hr)
+            iqa_loss = self.iqa_critn(score, score_gt)
+
+            # losses.update(loss.data, n=self.batch_size)
+            sr_losses.update(sr_loss.data, n=self.batch_size)
+            iqa_losses.update(iqa_loss.data, n=self.batch_size)
+            
+
+            if self.mode != 'IQA':
+                self.sr_optim.zero_grad()
+                sr_loss.backward()
+                self.sr_optim.step()
+
+            if self.mode != 'SR':
+                self.iqa_optim.zero_grad()
+                iqa_loss.backward()
+                self.iqa_optim.step()
+
+            desc = # "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
+                    "SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+                    "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f})"\
+                .format(i+1, len_train, # loss=losses, 
+                    sr_loss=sr_loss, iqa_loss=iqa_loss)
+            pb.set_description(desc)
+            self.logger.dump(desc)
+
+    def validate_epoch(self, epoch=0, store=False):
+        self.logger.show_nl("Epoch: [{0}]".format(epoch))
+        # losses = Metric()
+        sr_losses = Metric()
+        iqa_losses = Metric()
+        ssim = ShavedSSIM(self.scale)
+        psnr = ShavedPSNR(self.scale)
+        len_val = len(self.val_loader)
+        pb = tqdm(self.val_loader)
+        to_image = self.dataset.tensor_to_image
+
+        self.model.eval()
+
+        with torch.no_grad():
+            for i, (name, lr, hr) in enumerate(pb):
+                if self.phase == 'train' and i >= 16: 
+                    # Do not validate all images on training phase
+                    pb.close()
+                    self.logger.warning("validation ends early")
+                    break
+                    
+                lr, hr = lr.unsqueeze(0).cuda(), hr.unsqueeze(0).cuda()
+
+                sr, score = self.model(lr)
+                
+                score_gt = self.gauge_iqa_score(sr, hr)
+
+                sr_loss = self.sr_critn(sr, hr)
+                iqa_loss = self.iqa_critn(score, score_gt)
+
+                # losses.update(loss)
+                sr_losses.update(sr_loss)
+                iqa_losses.update(iqa_loss)
+
+                lr = to_image(lr.squeeze(0), 'lr')
+                sr = to_image(sr.squeeze(0))
+                hr = to_image(hr.squeeze(0))
+
+                psnr.update(sr, hr)
+                ssim.update(sr, hr)
+
+                desc = # "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
+                        "SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+                        "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f})"\
+                        "PSNR {psnr.val:.4f} ({psnr.avg:.4f}) " \
+                        "SSIM {ssim.val:.4f} ({ssim.avg:.4f})" \
+                        .format(i+1, len_val, # loss=losses,
+                                sr_loss=sr_loss, 
+                                iqa_loss=iqa_loss,
+                                psnr=psnr, ssim=ssim)
+
+                pb.set_description(desc)
+
+                self.logger.dump(desc)
+                
+                if store:
+                    # lr_name = self.path_ctrl.add_suffix(name, suffix='lr', underline=True)
+                    # hr_name = self.path_ctrl.add_suffix(name, suffix='hr', underline=True)
+                    sr_name = self.path_ctrl.add_suffix(name, suffix='sr', underline=True)
+
+                    # self.save_image(lr_name, lr, epoch)
+                    # self.save_image(hr_name, hr, epoch)
+                    self.save_image(sr_name, sr, epoch)
+
+        return psnr.avg
+        
+    def save_image(self, file_name, image, epoch):
+        file_path = os.path.join(
+            'x{}/epoch_{}/'.format(self.scale, epoch),
+            self.settings.out_dir,
+            file_name
+        )
+        out_path = self.path(
+            'out', file_path,
+            suffix=not self.settings.suffix_off,
+            auto_make=True,
+            underline=True
+        )
+        return io.imsave(out_path, image)
+
+    def gauge_quality_map(self, x1, x2):
+        return self.iqa_metric._ssim(x1, x2, size_average=False)

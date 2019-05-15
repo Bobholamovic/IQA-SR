@@ -6,7 +6,8 @@ _archs = {
     'SRGAN': 'srgan',
     'VDSR': 'vdsr',
     'WDSR': 'wdsr_b',
-    'EDSR': 'edsr'
+    'EDSR': 'edsr',
+    'MT': 'mt_edsr'
 }
 
 
