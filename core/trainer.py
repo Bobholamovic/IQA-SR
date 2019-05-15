@@ -563,7 +563,7 @@ class MTTrainer(Trainer):
             sr_loss = self.criterion(sr, hr)
             iqa_loss = self.iqa_critn(hr_qm, hr_qm_gt)
 
-            sr_loss += hr_qm.mean()
+            sr_loss += 1.0-hr_qm.mean()
 
             sr_losses.update(sr_loss.data, n=self.batch_size)
             iqa_losses.update(iqa_loss.data, n=self.batch_size)
@@ -577,7 +577,7 @@ class MTTrainer(Trainer):
             iqa_loss.backward()
             self.iqa_optim.step()
 
-            desc =  " SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+            desc =  "[{}/{}] SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
                     "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f})"\
                 .format(i+1, len_train, 
                     sr_loss=sr_losses, iqa_loss=iqa_losses)
@@ -606,12 +606,13 @@ class MTTrainer(Trainer):
                     
                 lr, hr = lr.unsqueeze(0).cuda(), hr.unsqueeze(0).cuda()
 
-                sr, score = self.model(lr)
+                sr = self.model(lr)
+                hr_qm = self.model.iqa_forward(sr)
                 
-                score_gt = self.gauge_iqa_score(sr, hr)
+                hr_qm_gt = self.gauge_quality_map(sr, hr)
 
                 sr_loss = self.criterion(sr, hr)
-                iqa_loss = self.iqa_critn(score, score_gt)
+                iqa_loss = self.iqa_critn(hr_qm, hr_qm_gt)
 
                 sr_losses.update(sr_loss)
                 iqa_losses.update(iqa_loss)
@@ -623,13 +624,13 @@ class MTTrainer(Trainer):
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)
 
-                desc =  "SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
+                desc =  "[{}/{}] SR Loss {sr_loss.val:.4f} ({sr_loss.avg:.4f}) " \
                         "IQA Loss {iqa_loss.val:.4f} ({iqa_loss.avg:.4f}) "\
                         "PSNR {psnr.val:.4f} ({psnr.avg:.4f}) " \
                         "SSIM {ssim.val:.4f} ({ssim.avg:.4f})" \
                         .format(i+1, len_val, 
-                                sr_loss=sr_losseses, 
-                                iqa_loss=iqa_loss,
+                                sr_loss=sr_losses, 
+                                iqa_loss=iqa_losses,
                                 psnr=psnr, ssim=ssim)
 
                 pb.set_description(desc)
