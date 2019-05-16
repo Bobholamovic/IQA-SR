@@ -530,16 +530,18 @@ class MTTrainer(Trainer):
         if not self.val_loader.lr_avai:
             self.logger.warning("warning: the low-resolution sources are not available")
 
-        self.sr_optim = torch.optim.Adam(self.model.sr_branch.parameters(), 
-                                          betas=(0.9,0.999), 
-                                          lr=self.lr, 
-                                          weight_decay=settings.weight_decay
-                                         )
-        self.iqa_optim = torch.optim.Adam(self.model.iqa_branch.parameters(), 
-                                          betas=(0.9,0.999), 
-                                          lr=self.lr, 
-                                          weight_decay=settings.weight_decay
-                                         )
+        def _make_optimizer(params):
+            return torch.optim.Adam(
+                params, 
+                betas=(0.9, 0.999), 
+                lr=self.lr,
+                weight_decay=settings.weight_decay
+            )
+
+        self.sr_optim = _make_optimizer(self.model.parameters())
+        self.iqa_optim = _make_optimizer(self.model.iqa_branch.parameters())
+        self.all_optim = _make_optimizer(self.model.parameters())
+
         self.iqa_metric = MS_SSIM(max_val=1.0)
 
         self.logger.dump(self.model)    # Log the architecture
@@ -560,33 +562,32 @@ class MTTrainer(Trainer):
             # Train IQA branch
             sr, _ = self.model(lr)
             sr_ng = sr.detach()
-            sr_qm = self.model.iqa_forward(sr_ng)
-            hr_qm = self.model.iqa_forward(hr)
+            sr_qm_sp = self.model.iqa_forward(sr_ng)  # Single-pass
+            # hr_qm = self.model.iqa_forward(hr)
             
             sr_qm_gt = self.gauge_quality_map(torch.clamp(sr_ng, 0.0, 1.0), hr)
-            iqa_loss = (self.iqa_critn(sr_qm, sr_qm_gt) + \
-                        self.iqa_critn(hr_qm, torch.ones_like(hr_qm))) / 2
 
-            self.iqa_optim.zero_grad()
-            iqa_loss.backward()
-            self.iqa_optim.step()
+            iqa_loss = self.iqa_critn(sr_qm_sp, sr_qm_gt)
 
-            # Train SR branch
-            sr, lr_qm = self.model(lr)
-            sr_qm = self.model.iqa_forward(sr)
 
             pix_loss = self.criterion(sr, hr)
-            perc_loss = 1.0 - torch.nn.functional.l1_loss(
-                sr_qm.view(self.batch_size, -1).mean(-1), 
-                lr_qm.detach().view(self.batch_size, -1).mean(-1)
-            )
 
-            sr_loss = pix_loss + 0.2*perc_loss
+            sr_loss = pix_loss + iqa_loss
+
+            # BackProp for both branches
+            self.all_optim.zero_grad()
+            sr_loss.backward()
+            self.all_optim.step()
+
+            # Perceptual supervision
+            sr, lr_qm = self.model(lr)
+            sr_qm = self.model.iqa_forward(sr)  # Recursive
+            
+            perc_loss = torch.abs(lr_qm.mean() - sr_qm.mean())
 
             self.sr_optim.zero_grad()
-            sr_loss.backward()
+            perc_loss.backward()
             self.sr_optim.step()
-
 
             # Update metrics
             sr_losses.update(sr_loss.data, n=self.batch_size)
@@ -629,13 +630,11 @@ class MTTrainer(Trainer):
 
                 sr, _ = self.model(lr)
                 sr_qm = self.model.iqa_forward(sr)
-                hr_qm = self.model.iqa_forward(hr)
                 
                 sr_qm_gt = self.gauge_quality_map(torch.clamp(sr, 0.0, 1.0), hr)
 
                 pix_loss = self.criterion(sr, hr)
-                iqa_loss = (self.iqa_critn(sr_qm, sr_qm_gt) + \
-                            self.iqa_critn(hr_qm, torch.ones_like(hr_qm))) / 2
+                iqa_loss = self.iqa_critn(sr_qm, sr_qm_gt)
 
                 sr_losses.update(pix_loss)
                 iqa_losses.update(iqa_loss)
