@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
 __MM__ = 'MTEDSR'
@@ -11,6 +12,92 @@ def default_conv(in_channels, out_channels, kernel_size, bias=True):
     return nn.Conv2d(
         in_channels, out_channels, kernel_size,
         padding=(kernel_size//2), bias=bias)
+
+
+class SeparableConv2d(nn.Module):
+    r"""
+        Modified from https://github.com/wuhuikai/FastFCN/blob/master/encoding/nn/customize.py
+    """
+    def __init__(self, inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False):
+        super(SeparableConv2d, self).__init__()
+
+        self.conv1 = nn.Conv2d(inplanes, inplanes, kernel_size, stride, padding, dilation, groups=inplanes, bias=bias)
+        self.pointwise = nn.Conv2d(inplanes, planes, 1, 1, 0, 1, 1, bias=bias)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.pointwise(x)
+        return x
+
+
+class SRJPU(nn.Module):
+    r"""
+        Joint Pyramid Upsampling
+        Paper: FastFCN: Rethinking Dilated Convolution in the Backbone for Semantic Segmentation
+
+        Modified from https://github.com/wuhuikai/FastFCN/blob/master/encoding/nn/customize.py
+        Take away all norm layers and change the inputs and outputs
+
+    """
+    def __init__(self, conv, scale, n_feats, width=64):
+        super(SRJPU, self).__init__()
+
+        self.convs = nn.ModuleList([
+            nn.Sequential(
+                conv(n_feats, width, 3, bias=True),
+                nn.ReLU(inplace=True) 
+            )
+        ])
+
+        if (scale & (scale-1)) == 0:
+            self.upsample = nn.Sequential(
+                conv(n_feats, 4 * n_feats, 3, bias=True),
+                nn.PixelShuffle(2)
+            )
+            # Stack weight-sharing upsampling modules on every scale
+            self.convs.extend([
+                nn.Sequential(
+                    *[self.upsample]*(s+1), 
+                    conv(n_feats, width, 3, bias=True),
+                    nn.ReLU(inplace=True)
+                ) for s in range(int(math.log(scale, 2)))
+            ])
+        elif scale == 3:
+            self.convs.extend([
+                nn.Sequential(
+                    conv(n_feats, 9 * n_feats, 3, bias=True),
+                    nn.PixelShuffle(3),
+                    conv(n_feats, width, 3, bias=True),
+                    nn.ReLU(inplace=True)
+                )
+            ])
+        else:
+            raise NotImplementedError
+
+        n = len(self.convs)
+
+        self.dilation1 = nn.Sequential(SeparableConv2d(n*width, width, kernel_size=3, padding=1, dilation=1, bias=False),
+                                       nn.ReLU(inplace=True))
+        self.dilation2 = nn.Sequential(SeparableConv2d(n*width, width, kernel_size=3, padding=2, dilation=2, bias=False),
+                                       nn.ReLU(inplace=True))
+        self.dilation3 = nn.Sequential(SeparableConv2d(n*width, width, kernel_size=3, padding=4, dilation=4, bias=False),
+                                       nn.ReLU(inplace=True))
+        self.dilation4 = nn.Sequential(SeparableConv2d(n*width, width, kernel_size=3, padding=8, dilation=8, bias=False),
+                                       nn.ReLU(inplace=True))
+
+        self.out_conv = conv(4*width, n_feats, 3, bias=True)
+
+    def forward(self, x):
+        feats = [conv(x) for conv in self.convs]
+        _, _, h, w = feats[-1].size()
+
+        for i in range(len(feats)-1):
+            feats[i] = F.upsample(feats[i], (h, w), mode='bilinear', align_corners=True)
+
+        feat = torch.cat(feats, dim=1)
+        feat = torch.cat([self.dilation1(feat), self.dilation2(feat), self.dilation3(feat), self.dilation4(feat)], dim=1)
+
+        return self.out_conv(feat)
 
 
 class ResBlock(nn.Module):
@@ -128,7 +215,8 @@ class EDSR(nn.Module):
 
         # define tail module
         m_tail = [
-            Upsampler(conv, scale, n_feats, act=False),
+            # Upsampler(conv, scale, n_feats, act=False),
+            SRJPU(conv, scale, n_feats),
             conv(n_feats, n_colors, kernel_size)
         ]
 
