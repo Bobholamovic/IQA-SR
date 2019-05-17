@@ -538,7 +538,7 @@ class MTTrainer(Trainer):
                 weight_decay=settings.weight_decay
             )
 
-        self.sr_optim = _make_optimizer(self.model.parameters())
+        self.sr_optim = _make_optimizer(self.model.sr_branch.parameters())
         self.iqa_optim = _make_optimizer(self.model.iqa_branch.parameters())
         self.all_optim = _make_optimizer(self.model.parameters())
 
@@ -560,31 +560,28 @@ class MTTrainer(Trainer):
             lr, hr = lr.cuda(), hr.cuda()
 
             # Train IQA branch
-            sr, _ = self.model(lr)
-            sr_ng = sr.detach()
-            sr_qm_sp = self.model.iqa_forward(sr_ng)  # Single-pass
-            # hr_qm = self.model.iqa_forward(hr)
-            
-            sr_qm_gt = self.gauge_quality_map(torch.clamp(sr_ng, 0.0, 1.0), hr)
-
-            iqa_loss = self.iqa_critn(sr_qm_sp, sr_qm_gt)
-
-
-            pix_loss = self.criterion(sr, hr)
-
-            sr_loss = pix_loss + iqa_loss
-
-            # BackProp for both branches
-            self.all_optim.zero_grad()
-            sr_loss.backward()
-            self.all_optim.step()
-
-            # Perceptual supervision
             sr, lr_qm = self.model(lr)
             sr_qm = self.model.iqa_forward(sr)  # Recursive
             
-            perc_loss = torch.abs(lr_qm.mean() - sr_qm.mean())
+            sr_qm_gt = self.gauge_quality_map(torch.clamp(sr.detach(), 0.0, 1.0), hr)
 
+            iqa_loss = self.iqa_critn(sr_qm, sr_qm_gt)
+            # The perceptual loss measures the quality degradation from 
+            # the low-resolution input to the reconstructed output
+            perc_loss = torch.abs(lr_qm.mean().detach() - sr_qm.mean())
+            pix_loss = self.criterion(sr, hr)
+
+            sr_loss = pix_loss + perc_loss
+
+            # The multi-task loss affects all parameters from both branches
+            mt_loss = pix_loss + iqa_loss
+
+            # BackProp for both branches
+            self.all_optim.zero_grad()
+            mt_loss.backward(retain_graph=True)
+            self.all_optim.step()
+            
+            # Do backpropagation of perceptual loss on sr branch solely
             self.sr_optim.zero_grad()
             perc_loss.backward()
             self.sr_optim.step()

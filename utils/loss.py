@@ -20,6 +20,8 @@ class IQALoss(nn.Module):
         self.feat_names = feat_names
         self._denorm = get_dataset(DATASET).denormalize
 
+        self.freeze()   # Disable the grads
+
     def forward(self, output, target):
         self.iqa_model.eval()   # Switch to eval
         rets = self.iqa_forward(output, target)

@@ -52,8 +52,8 @@ class ConcatResBlock(nn.Module):
             if with_act:
                 m.append(act)
 
-        _add_conv(n_feats, n_feats, with_act=True)
-        _add_conv(n_feats, n_feats//2, with_act=False)
+        _add_conv(n_feats+n_feats//2, n_feats, with_act=True)
+        _add_conv(n_feats, n_feats, with_act=False)
 
         self.body = nn.Sequential(*m)
         self.res_scale = res_scale
@@ -98,32 +98,32 @@ class Upsampler(nn.Sequential):
 class EDSR(nn.Module):
     def __init__(
         self, scale, n_resblocks=16, n_feats=64, res_scale=1.0,
-        n_colors=3, conv=default_conv, blk_type='default'
+        n_colors=3, conv=default_conv, blk_types=('R',)*16
     ):
         super(EDSR, self).__init__()
 
         kernel_size = 3
         act = nn.ReLU(True)
 
-        if blk_type == 'default':
-            # define head module
-            m_head = [conv(n_colors, n_feats, kernel_size)]
-            # define body module
-            m_body = [
-                ResBlock(
-                    conv, n_feats, kernel_size, act=act, res_scale=res_scale
-                ) for _ in range(n_resblocks)
-            ]
-        elif blk_type == 'concat':
-            m_head = [conv(n_colors, n_feats//2, kernel_size)]
-            m_body = [
-                ConcatResBlock(
-                    conv, n_feats, kernel_size, act=act, res_scale=res_scale
-                ) for _ in range(n_resblocks-1) 
-            ]
-            m_body.append(ResBlock(conv, n_feats, kernel_size, act=act, res_scale=res_scale))
-        else:
-            raise NotImplementedError
+        # define head module
+        m_head = [conv(n_colors, n_feats, kernel_size)]
+
+        # define body module
+        m_body = []
+        for i in range(n_resblocks):
+            if blk_types[i] == 'C':
+                m_body.append(
+                    ConcatResBlock(
+                        conv, n_feats, kernel_size, act=act, res_scale=res_scale
+                    )
+                )
+            else:
+                m_body.append(
+                    ResBlock(
+                        conv, n_feats, kernel_size, act=act, res_scale=res_scale
+                    ) 
+                )
+
         m_body.append(conv(n_feats, n_feats, kernel_size))
 
         # define tail module
@@ -150,14 +150,20 @@ class EDSR(nn.Module):
 class MTEDSR(nn.Module):
     def __init__(
         self, scale, n_resblocks=16, n_feats=64, res_scale=1.0,
-        n_colors=3, conv=default_conv
+        n_colors=3, conv=default_conv, 
+        blk_types=('R',)*4+('C',)*8+('R',)*4
     ):
         super(MTEDSR, self).__init__()
 
-        self.n_resblocks = n_resblocks
+        assert len(blk_types) == n_resblocks
 
-        self.sr_branch = EDSR(scale, n_resblocks, n_feats, res_scale, n_colors, conv, 'concat')
-        self.iqa_branch = EDSR(scale, n_resblocks, n_feats//2, res_scale, n_colors, conv)
+        self.sr_branch = EDSR(
+            scale, n_resblocks, n_feats, res_scale, n_colors, conv, 
+            blk_types
+        )
+        self.iqa_branch = EDSR(
+            scale, n_resblocks, n_feats//2, res_scale, n_colors, conv
+        )
         # Replace the tail of the IQA branch
         self.iqa_branch.tail = nn.Sequential(
             conv(n_feats//2, 1, 3),
@@ -168,15 +174,15 @@ class MTEDSR(nn.Module):
         res_sr = x_sr = self.sr_branch.head(x)
         res_iqa = self.iqa_branch.head(x)
 
-        for sr_blk, iqa_blk in zip(self.sr_branch.body[:-2], self.iqa_branch.body[:-2]):
-            res_sr = sr_blk(res_sr, res_iqa)
+        for sr_blk, iqa_blk in zip(self.sr_branch.body, self.iqa_branch.body):
+            if isinstance(sr_blk, ConcatResBlock):
+                res_sr = sr_blk(res_sr, res_iqa)
+            elif isinstance(sr_blk, nn.Conv2d):
+                res_sr = x_sr + sr_blk(res_sr)
+            else:
+                res_sr = sr_blk(res_sr)
+
             res_iqa = iqa_blk(res_iqa)
-
-        res_sr = self.sr_branch.body[-2](torch.cat([res_sr, x_sr], 1))
-        res_sr = self.sr_branch.body[-1](res_sr)
-
-        for idx in range(-2,0):
-            res_iqa = self.iqa_branch.body[idx](res_iqa)
 
         iqa_map = self.iqa_branch.tail(res_iqa)
 
