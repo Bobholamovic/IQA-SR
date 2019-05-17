@@ -68,6 +68,7 @@ class SRDataset(torch.utils.data.Dataset):
         return self.num * self.repeats
         
     def _read_lists(self):
+        # Use /home/user/... instead of ~/...
         assert isdir(self.list_dir)
         self.lr_avai = False
         list_path = join(self.list_dir, IMAGE_LIST_PATTERN.format(ph=self.subset))  

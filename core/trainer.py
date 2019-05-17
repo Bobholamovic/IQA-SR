@@ -32,7 +32,7 @@ class Trainer:
         self.checkpoint = settings.resume
         self.load_checkpoint = (len(self.checkpoint)>0)
         self.num_epochs = settings.num_epochs
-        self.lr = settings.lr
+        self.lr = float(settings.lr)
         self.save = settings.save_on or settings.out_dir
         self.from_pause = self.settings.continu
         self.path_ctrl = settings.global_path
