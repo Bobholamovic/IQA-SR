@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os
 from contextlib import contextmanager
+from collections import OrderedDict
 
 from models.iqanet import IQANet
 from dataset.dataset import get_dataset
@@ -14,40 +16,37 @@ class IQALoss(nn.Module):
         super(IQALoss, self).__init__()
 
         self.iqa_model = IQANet(weighted=False)
-        self.iqa_model.load_state_dict(torch.load(path_to_model_weight)['state_dict'])
+        if os.path.exists(path_to_model_weight):
+            self.iqa_model.load_state_dict(
+                torch.load(path_to_model_weight)['state_dict']
+            )
 
         self.patch_size = patch_size
         self.feat_names = feat_names
         self._denorm = get_dataset(DATASET).denormalize
 
+        self._register_hooks()
+
     def forward(self, output, target):
         self.iqa_model.eval()   # Switch to eval
-        rets = self.iqa_forward(output, target)
 
-        sel_feats = []
-        # The features are fetched and stored in the order of feat_names
-        for k in self.feat_names:
-            sel_feats.append(rets.features.__getitem__(k))
+        score_o = self.iqa_forward(output)
+        feat_o = self.features.copy()
+        score_t = self.iqa_forward(target.data)
+        feat_t = self.features
 
-        for i, f in enumerate(sel_feats):
-            if isinstance(f, tuple):
-                assert len(f) == 2
-                # Looks like that F.mse_loss gives unexpected values when
-                # the target requires grad
-                sel_feats[i] = F.mse_loss(f[0], f[1].detach())
-            else:
-                sel_feats[i] = torch.mean(torch.abs(f))
+        # losses = [F.mse_loss(feat_o[n], feat_t[n]) for n in self.feat_names]
+        print(score_o, score_t)
+        losses = [F.mse_loss(fo, ft) for fo, ft in zip(feat_o.values(), feat_t.values())]
 
-        return torch.stack(sel_feats, dim=0)
+        return score_o, torch.stack(losses, dim=0)
 
-    def iqa_forward(self, output, target):
-        output = self.renormalize(output)
-        target = self.renormalize(target)
+    def iqa_forward(self, x):
+        x = self.renormalize(x)
         
-        output_patches = self._extract_patches(output)
-        target_patches = self._extract_patches(target)
+        patches = self._extract_patches(x)
 
-        return self.iqa_model(output_patches, target_patches)
+        return self.iqa_model(patches)
         
     def _extract_patches(self, img):
         h, w = img.shape[-2:]
@@ -59,6 +58,21 @@ class IQALoss(nn.Module):
         patchs = torch.cat(torch.split(vpatchs[...,bw:bw+cw], self.patch_size, dim=-1), dim=1)
 
         return patchs
+
+    def _register_hooks(self):
+        from functools import partial
+        # Keep in order
+        self.features = OrderedDict(zip(self.feat_names, (None,)*len(self.feat_names)))
+
+        def _hook(m, i, o, n=''):
+            # To retain gradients, store the identical
+            self.features[n] = o
+        
+        self.handles = [
+            l.register_forward_hook(partial(_hook, n=n))
+            for n, l in self.iqa_model.named_children()
+            if n in self.feat_names
+        ]
 
     def renormalize(self, img):
         # Clamp to [0, 255] before normalizing
@@ -127,14 +141,15 @@ class ComLoss(nn.Module):
             return pixel_loss
 
         feat_loss = self.feat_criterion(output, target)
-        tv_loss = self._calc_tv_loss(output)
+        # tv_loss = self._calc_tv_loss(output)
 
-        total_loss = self.alpha*pixel_loss + feat_loss + 1e-3*tv_loss
+        total_loss = self.alpha*pixel_loss + feat_loss  # + 1e-3*tv_loss
 
         return total_loss, pixel_loss, feat_loss
 
     def _calc_feat_loss(self, output, target):
-        return torch.sum(self.weights*self.iqa_loss(output, target))
+        nr_loss, fr_loss = self.iqa_loss(output, target)
+        return nr_loss + torch.sum(self.weights*fr_loss)
 
     def _none(self, output, target):
         return torch.tensor(0.0).type_as(output)

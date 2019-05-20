@@ -1,33 +1,6 @@
 import math
-from collections import namedtuple, OrderedDict
 import torch
 import torch.nn as nn
-
-
-def register(module, name, features):
-    _forward = module.forward
-    def hooked_forward(*args, **kwargs):
-        out = _forward(*args, **kwargs)
-        features.update({name: out})
-        return out
-    # Monkey patch here
-    module.forward = hooked_forward
-    return module
-
-
-def register_du(module, name, features):
-    _forward = module.forward
-    def hooked_forward(*args, __buffer=[], **kwargs):
-        out = _forward(*args, **kwargs)
-        if len(__buffer) < 2:
-            __buffer.append(out)
-            if len(__buffer) == 2:
-                features.update({name: tuple(__buffer)})
-                __buffer.clear()
-        return out
-    # Patch it
-    module.forward = hooked_forward
-    return module
 
 
 class Conv3x3(nn.Module):
@@ -89,80 +62,50 @@ class IQANet(nn.Module):
         super(IQANet, self).__init__()
 
         self.weighted = weighted
-        self.features = OrderedDict()
 
         # Feature extraction layers
         self.fl1 = DoubleConv(3, 32)
         self.fl2 = DoubleConv(32, 64)
         self.fl3 = DoubleConv(64, 128)
-
-        # Fusion layers
-        self.cl1 = SingleConv(128*3, 128)
-        self.cl2 = nn.Conv2d(128, 64, kernel_size=2)
+        self.fl4 = DoubleConv(128, 256)
+        self.fl5 = DoubleConv(256, 512)
 
         # Regression layers
-        self.rl1 = nn.Linear(64, 32)
-        self.rl2 = nn.Linear(32, 1)
-
-        if self.weighted:
-            self.wl1 = nn.Linear(64, 32)
-            self.wl2 = nn.Linear(32, 1)
+        self.rl1 = nn.Linear(512, 128)
+        self.rl2 = nn.Linear(128, 64)
+        self.rl3 = nn.Linear(64, 1)
 
         self.dropout = nn.Dropout(0.5)
 
         self._initialize_weights()
-
-        self.ret_tuple = namedtuple('rets', ['score', 'features'])
-
-    def __setattr__(self, name, value):
-        if isinstance(value, nn.Module):
-            if name[:2] == 'fl':
-                register_du(value, name, self.features)
-            else:
-                register(value, name, self.features)
-        return super().__setattr__(name, value)
 
     def extract_feature(self, x):
         """ Forward function for feature extraction of each branch of the siamese net """
         y = self.fl1(x)
         y = self.fl2(y)
         y = self.fl3(y)
+        y = self.fl4(y)
+        y = self.fl5(y)
 
         return y
         
-    def forward(self, x1, x2):
-        """ x1 as distorted and x2 as reference """
-        n_imgs, n_ptchs_per_img = x1.shape[0:2]
+    def forward(self, x):
+        n_imgs, n_ptchs_per_img = x.shape[0:2]
         
         # Reshape
-        x1 = x1.view(-1,*x1.shape[-3:])
-        x2 = x2.view(-1,*x2.shape[-3:])
+        x = x.view(-1, *x.shape[-3:])
 
-        f1 = self.extract_feature(x1)
-        f2 = self.extract_feature(x2)
+        f = self.extract_feature(x)
 
-        f_com = torch.cat([f2, f1, f2-f1], dim=1)  # Concat the features
-        f_com = self.cl1(f_com)
-        f_com = self.cl2(f_com)
-
-        flatten = f_com.view(f_com.shape[0], -1)
+        flatten = f.view(f.shape[0], -1)
 
         y = self.rl1(flatten)
         y = self.rl2(y)
+        y = self.rl3(y)
 
-        if self.weighted:
-            w = self.wl1(flatten)
-            w = self.wl2(w)
-            w = torch.nn.functional.relu(w) + 1e-8
-            # Weighted average
-            y_by_img = y.view(n_imgs, n_ptchs_per_img)
-            w_by_img = w.view(n_imgs, n_ptchs_per_img)
-            score = torch.sum(y_by_img*w_by_img, dim=1) / torch.sum(w_by_img, dim=1)
-        else:
-            # Calculate average score for each image
-            score = torch.mean(y.view(n_imgs, n_ptchs_per_img), dim=1)
+        score = torch.mean(y)
 
-        return self.ret_tuple(score.squeeze(), self.features)
+        return score
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -179,3 +122,4 @@ class IQANet(nn.Module):
                 m.bias.data.zero_()
             else:
                 pass
+                
