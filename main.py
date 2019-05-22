@@ -82,7 +82,7 @@ def parse_args():
     parser.add_argument('--continu', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
-    parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-NRIQA/models/ckp_koniq10k.pkl')
+    parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-NRIQA/models/ckp_MA.pkl')
     parser.add_argument('--trace-freq', type=int, default=50)
     parser.add_argument('--reproduce', type=int, default=1)
     parser.add_argument('--alpha', type=float, default=1.0, help='weighting coefficient of pixel loss')

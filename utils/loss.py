@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 import os
+from pdb import set_trace as db
 from contextlib import contextmanager
 from collections import OrderedDict
 
@@ -36,10 +38,9 @@ class IQALoss(nn.Module):
         feat_t = self.features
 
         # losses = [F.mse_loss(feat_o[n], feat_t[n]) for n in self.feat_names]
-        print(score_o, score_t)
         losses = [F.mse_loss(fo, ft) for fo, ft in zip(feat_o.values(), feat_t.values())]
 
-        return score_o, torch.stack(losses, dim=0)
+        return score_o.mean(), torch.stack(losses, dim=0)
 
     def iqa_forward(self, x):
         x = self.renormalize(x)

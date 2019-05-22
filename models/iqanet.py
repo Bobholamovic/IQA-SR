@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class Conv3x3(nn.Module):
@@ -14,6 +15,7 @@ class Conv3x3(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
 class MaxPool2x2(nn.Module):
     def __init__(self):
         super(MaxPool2x2, self).__init__()
@@ -21,6 +23,7 @@ class MaxPool2x2(nn.Module):
     
     def forward(self, x):
         return self.pool(x)
+
 
 class DoubleConv(nn.Module):
     """
@@ -40,6 +43,7 @@ class DoubleConv(nn.Module):
         y = self.pool(y)
         return y
 
+
 class SingleConv(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(SingleConv, self).__init__()
@@ -53,11 +57,6 @@ class SingleConv(nn.Module):
 
 
 class IQANet(nn.Module):
-    """
-    The CNN model for full-reference image quality assessment
-    
-    Implements a siamese network at first and then there is regression
-    """
     def __init__(self, weighted=False):
         super(IQANet, self).__init__()
 
@@ -71,16 +70,16 @@ class IQANet(nn.Module):
         self.fl5 = DoubleConv(256, 512)
 
         # Regression layers
-        self.rl1 = nn.Linear(512, 128)
-        self.rl2 = nn.Linear(128, 64)
-        self.rl3 = nn.Linear(64, 1)
+        self.rl1 = nn.Linear(512, 512)
+        self.rl2 = nn.Linear(512, 1)
 
-        self.dropout = nn.Dropout(0.5)
+        if self.weighted:
+            self.wl1 = nn.Linear(512, 512)
+            self.wl2 = nn.Linear(512, 1)
 
         self._initialize_weights()
 
     def extract_feature(self, x):
-        """ Forward function for feature extraction of each branch of the siamese net """
         y = self.fl1(x)
         y = self.fl2(y)
         y = self.fl3(y)
@@ -99,13 +98,22 @@ class IQANet(nn.Module):
 
         flatten = f.view(f.shape[0], -1)
 
-        y = self.rl1(flatten)
+        y = F.dropout(F.relu(self.rl1(flatten)), 0.5, self.training)
         y = self.rl2(y)
-        y = self.rl3(y)
 
-        score = torch.mean(y)
+        if self.weighted:
+            w = F.dropout(F.relu(self.wl1(flatten)), 0.5, self.training)
+            w = self.wl2(w)
+            w = F.relu(w) + 1e-8
+            # Weighted averaging
+            y_by_img = y.view(n_imgs, n_ptchs_per_img)
+            w_by_img = w.view(n_imgs, n_ptchs_per_img)
+            score = torch.sum(y_by_img*w_by_img, dim=1) / torch.sum(w_by_img, dim=1)
+        else:
+            # Calculate average score for each image
+            score = torch.mean(y.view(n_imgs, n_ptchs_per_img), dim=1)
 
-        return score
+        return score.squeeze()
 
     def _initialize_weights(self):
         for m in self.modules():
