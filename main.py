@@ -31,7 +31,10 @@ def parse_config(cfg_name, cfg):
         # What is done here is to separate them into two tuples
         feat_names, weights = zip(*(tuple(*f.items()) for f in cfg['feats']))
         del cfg['feats']
-        cfg = {**cfg, 'feat_names': feat_names, 'weights': weights}
+        cfg.update({
+            'feat_names': feat_names, 
+            'weights': [float(w) for w in weights]
+        })
 
     # Parse the name of config file
     sp = cfg_name.split('.')[0].split('_')

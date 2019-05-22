@@ -38,9 +38,18 @@ class IQALoss(nn.Module):
         feat_t = self.features
 
         # losses = [F.mse_loss(feat_o[n], feat_t[n]) for n in self.feat_names]
-        losses = [F.mse_loss(fo, ft) for fo, ft in zip(feat_o.values(), feat_t.values())]
 
-        return score_o.mean(), torch.stack(losses, dim=0)
+        losses = [
+            F.mse_loss(fo, ft)
+            for fo, ft 
+            in zip(feat_o.values(), feat_t.values())
+        ]
+
+        if 'nr' in self.feat_names:
+            # Put nr loss on the last
+            losses.append(torch.mean(torch.abs(score_o)))
+
+        return torch.stack(losses, dim=0)
 
     def iqa_forward(self, x):
         x = self.renormalize(x)
@@ -62,8 +71,19 @@ class IQALoss(nn.Module):
 
     def _register_hooks(self):
         from functools import partial
+        # Strip nr and invalid names
+        feat_names = [
+            n 
+            for n in self.feat_names
+            # not nr 
+            if n != 'nr' 
+            and 
+            # exists in the model
+            hasattr(self.iqa_model, n)
+        ]
+        
         # Keep in order
-        self.features = OrderedDict(zip(self.feat_names, (None,)*len(self.feat_names)))
+        self.features = OrderedDict(zip(feat_names, (None,)*len(feat_names)))
 
         def _hook(m, i, o, n=''):
             # To retain gradients, store the identical
@@ -72,7 +92,7 @@ class IQALoss(nn.Module):
         self.handles = [
             l.register_forward_hook(partial(_hook, n=n))
             for n, l in self.iqa_model.named_children()
-            if n in self.feat_names
+            if n in feat_names
         ]
 
     def renormalize(self, img):
@@ -128,7 +148,15 @@ class ComLoss(nn.Module):
         self.weights = weights
         if self.weights is not None:
             assert len(weights) == len(feat_names)
-            self.weights = torch.FloatTensor(weights)
+            try:
+                # Move nr to the tail
+                nr_idx = feat_names.index('nr')
+                weights = weights[:nr_idx]+weights[nr_idx+1:]+[weights[nr_idx]]
+            except ValueError:
+                pass
+            finally:
+                self.weights = torch.FloatTensor(weights)
+
             if torch.cuda.is_available(): self.weights = self.weights.cuda()
             self.iqa_loss = IQALoss(model_path, patch_size, feat_names)
             self.feat_criterion = self._calc_feat_loss
@@ -149,8 +177,8 @@ class ComLoss(nn.Module):
         return total_loss, pixel_loss, feat_loss
 
     def _calc_feat_loss(self, output, target):
-        nr_loss, fr_loss = self.iqa_loss(output, target)
-        return nr_loss + torch.sum(self.weights*fr_loss)
+        loss = self.iqa_loss(output, target)
+        return torch.sum(self.weights*loss)
 
     def _none(self, output, target):
         return torch.tensor(0.0).type_as(output)
