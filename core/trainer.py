@@ -45,7 +45,7 @@ class Trainer:
             phase=self.phase
         )
 
-        for k,v in settings.__dict__.items(): 
+        for k,v in sorted(settings.__dict__.items()): 
             self.logger.show("{}: {}".format(k,v))
 
         self.start_epoch = 0
@@ -139,7 +139,7 @@ class Trainer:
             if k in state_dict and state_dict[k].shape == v.shape}
         
         num_to_update = len(update_dict)
-        if len(state_dict) != num_to_update:
+        if len(state_dict) != len(ckp_dict):
             if self.phase == 'val':
                 self.logger.error("=> mismatched checkpoint for validation")
                 return False
@@ -445,8 +445,8 @@ class GANTrainer(SRTrainer):
             # # Ensure that the criterion is on the eval mode
             # self.discr_critn.eval()
 
-            # This looks weird and I wonder if there's something like 
-            # apply_along_axis in pytorch to handle this loop
+            # XXX: This looks weird and I wonder if there's something
+            # like apply_along_axis in pytorch to handle this loop
             chunks = zip(
                 torch.chunk(output, bs, dim=0), 
                 torch.chunk(target, bs, dim=0)

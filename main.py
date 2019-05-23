@@ -3,9 +3,7 @@ import argparse
 import os
 import yaml
 import shutil
-from time import localtime
-from os.path import join, basename, exists
-from pdb import set_trace as db
+from os.path import basename, exists
 
 from core.trainer import SRTrainer
 from core.predictor import SRPredictor
@@ -98,7 +96,9 @@ def parse_args():
         cfg = read_config(args.exp_config)
         cfg = parse_config(cfg_name, cfg)
         # Settings from cfg file overwrite those in args
-        args.__dict__.update(cfg)
+        # Note that the non-default values will not be affected
+        parser.set_defaults(**cfg)  # Reset part of the default values
+        args = parser.parse_args()  # Parse again
 
     if args.cmd in ('train', 'val'):
         # Disable global path controller in test phase
