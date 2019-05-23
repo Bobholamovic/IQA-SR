@@ -4,6 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def pool(x):
+    return F.max_pool2d(x, 2, stride=(2,2))
+
+
 class Conv3x3(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(Conv3x3, self).__init__()
@@ -16,13 +20,9 @@ class Conv3x3(nn.Module):
         return self.conv(x)
 
 
-class MaxPool2x2(nn.Module):
+class MaxPool2x2(nn.MaxPool2d):
     def __init__(self):
-        super(MaxPool2x2, self).__init__()
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=(2,2), padding=(0,0))
-    
-    def forward(self, x):
-        return self.pool(x)
+        super().__init__(kernel_size=2, stride=(2,2), padding=(0,0))
 
 
 class DoubleConv(nn.Module):
@@ -35,12 +35,10 @@ class DoubleConv(nn.Module):
         super(DoubleConv, self).__init__()
         self.conv1 = Conv3x3(in_dim, out_dim)
         self.conv2 = Conv3x3(out_dim, out_dim)
-        self.pool = MaxPool2x2()
 
     def forward(self, x):
         y = self.conv1(x)
         y = self.conv2(y)
-        y = self.pool(y)
         return y
 
 
@@ -48,11 +46,9 @@ class SingleConv(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(SingleConv, self).__init__()
         self.conv = Conv3x3(in_dim, out_dim)
-        self.pool = MaxPool2x2()
 
     def forward(self, x):
         y = self.conv(x)
-        y = self.pool(y)
         return y
 
 
@@ -80,11 +76,11 @@ class IQANet(nn.Module):
         self._initialize_weights()
 
     def extract_feature(self, x):
-        y = self.fl1(x)
-        y = self.fl2(y)
-        y = self.fl3(y)
-        y = self.fl4(y)
-        y = self.fl5(y)
+        y = pool(self.fl1(x))
+        y = pool(self.fl2(y))
+        y = pool(self.fl3(y))
+        y = pool(self.fl4(y))
+        y = pool(self.fl5(y))
 
         return y
         

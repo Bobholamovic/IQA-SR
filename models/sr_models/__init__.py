@@ -6,7 +6,8 @@ _archs = {
     'SRGAN': 'srgan',
     'VDSR': 'vdsr',
     'WDSR': 'wdsr_b',
-    'EDSR': 'edsr'
+    'EDSR': 'edsr',
+    'EDSR_RESIZE_CONV': 'edsr_rc'
 }
 
 

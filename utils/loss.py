@@ -67,7 +67,13 @@ class IQALoss(nn.Module):
         vpatchs = torch.stack(torch.split(img[...,bh:bh+ch,:], self.patch_size, dim=-2), dim=1)
         patchs = torch.cat(torch.split(vpatchs[...,bw:bw+cw], self.patch_size, dim=-1), dim=1)
 
-        return patchs
+        # Random selection to introduce noise
+        n = patchs.size(1)  # The number of patches
+        return torch.index_select(
+            patchs, 
+            1, 
+            torch.randperm(n)[:n//2].to(patchs.device)
+        )
 
     def _register_hooks(self):
         from functools import partial
@@ -170,9 +176,9 @@ class ComLoss(nn.Module):
             return pixel_loss
 
         feat_loss = self.feat_criterion(output, target)
-        # tv_loss = self._calc_tv_loss(output)
+        #tv_loss = self._calc_tv_loss(output)
 
-        total_loss = self.alpha*pixel_loss + feat_loss  # + 1e-3*tv_loss
+        total_loss = self.alpha*pixel_loss + feat_loss# + 1e-3*tv_loss
 
         return total_loss, pixel_loss, feat_loss
 
