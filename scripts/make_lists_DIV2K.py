@@ -44,7 +44,7 @@ for p in PHASE:
         ssv(s, 'file_lr', open(join(out_dir, '_'.join([p, 'list_lr.txt'])), 'w'))
         ssv(s, 'file', open(join(out_dir, '{}_list.txt'.format(p)), 'w'))
     
-    hr_list = glob(join(hr_folder, '*.png'))
+    hr_list = sorted(glob(join(hr_folder, '*.png')))
     
     for hr_name in tqdm(hr_list):
         for s in SCALE:
