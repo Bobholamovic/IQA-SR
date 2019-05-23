@@ -139,7 +139,7 @@ class Trainer:
             if k in state_dict and state_dict[k].shape == v.shape}
         
         num_to_update = len(update_dict)
-        if len(state_dict) != len(ckp_dict):
+        if (num_to_update < len(state_dict)) or (len(state_dict) < len(ckp_dict)):
             if self.phase == 'val':
                 self.logger.error("=> mismatched checkpoint for validation")
                 return False
