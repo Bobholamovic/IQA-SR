@@ -31,9 +31,9 @@ def parse_config(cfg_name, cfg):
         # What is to be done here is to separate them into two tuples
         feat_names, weights = zip(*(tuple(*f.items()) for f in cfg['feats']))
         del cfg['feats']
-        weights = [float(w) for w in weights]
         cfg.update({
-            'feat_names': feat_names, 'weights': weights
+            'feat_names': feat_names, 
+            'weights': [float(w) for w in weights]
         })
 
     # Parse the name of config file
