@@ -47,8 +47,8 @@ class IQALoss(nn.Module):
 
         if 'nr' in self.feat_names:
             # Put nr loss on the last
-            losses.append(torch.mean(torch.abs(score_o)))
-
+            losses.append(torch.pow(score_o/100.0, 2).mean())
+        
         return torch.stack(losses, dim=0)
 
     def iqa_forward(self, x):
@@ -67,13 +67,14 @@ class IQALoss(nn.Module):
         vpatchs = torch.stack(torch.split(img[...,bh:bh+ch,:], self.patch_size, dim=-2), dim=1)
         patchs = torch.cat(torch.split(vpatchs[...,bw:bw+cw], self.patch_size, dim=-1), dim=1)
 
-        # Random selection to introduce noise
-        n = patchs.size(1)  # The number of patches
-        return torch.index_select(
-            patchs, 
-            1, 
-            torch.randperm(n)[:n//2].to(patchs.device)
-        )
+        # # Random selection to introduce noise
+        # n = patchs.size(1)  # The number of patches
+        # return torch.index_select(
+        #     patchs, 
+        #     1, 
+        #     torch.randperm(n)[:n//2].to(patchs.device)
+        # )
+        return patchs
 
     def _register_hooks(self):
         from functools import partial
@@ -126,9 +127,21 @@ class IQALoss(nn.Module):
 
     @contextmanager
     def learner(self):
-        self.unfreeze()
+        is_training = self.iqa_model.training
+        param_is_frozen = (
+            (n, p.requires_grad)
+            for n, p in self.iqa_model.named_parameters()
+        )
+        self.unfreeze() # Unfreeze all parameters
+        self.iqa_model.train()
+
         yield self.iqa_model
-        self.freeze()
+
+        # Revert to the original
+        for p, s in param_is_frozen: p.requires_grad = s
+
+        if not is_training:
+            self.iqa_model.eval()
 
 
 class ComLoss(nn.Module):
