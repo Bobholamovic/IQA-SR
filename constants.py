@@ -10,12 +10,12 @@ _INTERP_METHODS = {
 INTERP_ORDER = _INTERP_METHODS['BICUBIC']
 
 # Image postfixes to recognize in a given directory
-IMAGE_POSTFIXES = ['.jpg', '.jpeg',     '.png', '.bmp', '.tif', '.tiff']
+IMAGE_POSTFIXES = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']
 # npz file postfixes
 NPZ_POSTFIXES = ['.npz', '.pt']
 
 # Network architecture
-ARCH = 'EDSR_RESIZE_CONV'
+ARCH = 'EDSR'
 
 # Dataset on training
 DATASET = 'Default'
