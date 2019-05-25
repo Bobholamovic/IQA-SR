@@ -163,6 +163,19 @@ class SRDataset(torch.utils.data.Dataset):
         return np.clip(arr, 0, 255).astype('uint8')
 
 
+class DefaultDataset(SRDataset):
+    _mean = np.asarray([124.46190829, 115.98740693, 104.40056142])
+    _std = np.asarray([63.25935824, 61.56368587, 63.60759291])
+    
+    @classmethod
+    def normalize(cls, x, mode='lr'):
+        return x/255.0
+
+    @classmethod
+    def denormalize(cls, x, mode='hr'):
+        return x*255.0
+
+
 class WaterlooDataset(SRDataset):
     _mean = np.asarray([124.46190829, 115.98740693, 104.40056142])
     _std = np.asarray([63.25935824, 61.56368587, 63.60759291])

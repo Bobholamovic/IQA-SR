@@ -18,7 +18,7 @@ NPZ_POSTFIXES = ['.npz', '.pt']
 ARCH = 'EDSR_RESIZE_CONV'
 
 # Dataset on training
-DATASET = 'DIV2K'
+DATASET = 'Default'
 # Expected names of data lists
 IMAGE_LIST_PATTERN = "{ph!s}_list.txt"
 LR_LIST_PATTERN = "{ph!s}_list_lr.txt"
