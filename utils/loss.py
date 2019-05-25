@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import os
+import weakref
 from pdb import set_trace as db
 from contextlib import contextmanager
 from collections import OrderedDict
@@ -25,30 +26,33 @@ class IQALoss(nn.Module):
 
         self.patch_size = patch_size
         self.feat_names = feat_names
+        self.regular = 'nr' in feat_names
+        self.feat_names = [
+            n 
+            for n in feat_names
+            # not nr 
+            if n != 'nr' 
+            and 
+            # exists in the model
+            hasattr(self.iqa_model, n)
+        ]   # Names of the features to preserve
         self._denorm = get_dataset(DATASET).denormalize
-
-        self._register_hooks()
 
     def forward(self, output, target):
         self.iqa_model.eval()   # Switch to eval
 
+        features = self._init_feature_dict()
+        features, _ = self._register_hooks(features, True)
         score_o = self.iqa_forward(output)
-        feat_o = self.features.copy()
+        features, _ = self._register_hooks(features, False)
         score_t = self.iqa_forward(target.data)
-        feat_t = self.features
 
-        # losses = [F.mse_loss(feat_o[n], feat_t[n]) for n in self.feat_names]
+        losses = list(features.values())
 
-        losses = [
-            F.mse_loss(fo, ft)
-            for fo, ft 
-            in zip(feat_o.values(), feat_t.values())
-        ]
-
-        if 'nr' in self.feat_names:
+        if self.regular:
             # Put nr loss on the last
             losses.append(torch.pow(score_o/100.0, 2).mean())
-        
+
         return torch.stack(losses, dim=0)
 
     def iqa_forward(self, x):
@@ -76,31 +80,33 @@ class IQALoss(nn.Module):
         # )
         return patchs
 
-    def _register_hooks(self):
+    def _register_hooks(self, features, feed_output):
         from functools import partial
-        # Strip nr and invalid names
-        feat_names = [
-            n 
-            for n in self.feat_names
-            # not nr 
-            if n != 'nr' 
-            and 
-            # exists in the model
-            hasattr(self.iqa_model, n)
-        ]
-        
-        # Keep in order
-        self.features = OrderedDict(zip(feat_names, (None,)*len(feat_names)))
 
-        def _hook(m, i, o, n=''):
+        def _hook_o(m, i, o, n=''):
             # To retain gradients, store the identical
-            self.features[n] = o
+            features[n] = o
+                    
+        def _hook_t(m, i, o, n=''):
+            # A second pass on the target data calculates the loss
+            features[n] = F.mse_loss(features[n], o)
         
-        self.handles = [
+        _hook = _hook_o if feed_output else _hook_t
+
+        handles = [
             l.register_forward_hook(partial(_hook, n=n))
             for n, l in self.iqa_model.named_children()
-            if n in feat_names
+            if n in self.feat_names
         ]
+
+        return features, handles
+
+    def _init_feature_dict(self):       
+        # Keep in order
+        return OrderedDict(
+            zip(self.feat_names, 
+            (None,)*len(self.feat_names))
+        )
 
     def renormalize(self, img):
         # Clamp to [0, 255] before normalizing
