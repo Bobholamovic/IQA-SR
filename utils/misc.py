@@ -266,9 +266,12 @@ class OutPathGetter:
         )
 
         self.update_keys(False)
-        self.update_tree(True)
+        self.update_tree(False)
 
         self.__counter = 0
+
+    def __str__(self):
+        return '\n'+self.sub_dirs
 
     @property
     def sub_dirs(self):

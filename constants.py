@@ -15,7 +15,7 @@ IMAGE_POSTFIXES = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']
 NPZ_POSTFIXES = ['.npz', '.pt']
 
 # Network architecture
-ARCH = 'EDSR'
+ARCH = 'EDSR_RESIZE_CONV'
 
 # Dataset on training
 DATASET = 'Default'
