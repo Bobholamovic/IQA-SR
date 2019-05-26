@@ -34,7 +34,6 @@ class Trainer:
         self.num_epochs = settings.num_epochs
         self.lr = float(settings.lr)
         self.save = settings.save_on or settings.out_dir
-        self.from_pause = self.settings.continu
         self.path_ctrl = settings.global_path
         self.path = self.path_ctrl.get_path
 
@@ -71,8 +70,7 @@ class Trainer:
         self.model.cuda()
         self.criterion.cuda()
         
-        end_epoch = self.num_epochs if self.from_pause else self.start_epoch+self.num_epochs
-        for epoch in range(self.start_epoch, end_epoch):
+        for epoch in range(self.start_epoch, self.num_epochs):
             lr = self._adjust_learning_rate(epoch)
             
             self.logger.show_nl("Epoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
@@ -107,11 +105,10 @@ class Trainer:
         
     def _adjust_learning_rate(self, epoch):
         # Note that this does not take effect for separate learning rates
-        start_epoch = 0 if self.from_pause else self.start_epoch
         if self.settings.lr_mode == 'step':
-            lr = self.lr * (0.5 ** ((epoch-start_epoch) // self.settings.step))
+            lr = self.lr * (0.5 ** (epoch // self.settings.step))
         elif self.settings.lr_mode == 'poly':
-            lr = self.lr * (1 - (epoch-start_epoch) / (self.num_epochs-start_epoch)) ** 1.1
+            lr = self.lr * (1 - epoch / self.num_epochs) ** 1.1
         elif self.settings.lr_mode == 'const':
             lr = self.lr
         else:
@@ -173,7 +170,7 @@ class Trainer:
         history_path = self.path('weight', CKP_COUNTED.format(
                                 e=epoch, s=self.scale
                                 ), underline=True)
-        if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
+        if epoch % self.settings.trace_freq == 0:
             torch.save(state, history_path)
         # Save latest
         latest_path = self.path(
@@ -478,7 +475,7 @@ class GANTrainer(SRTrainer):
         history_path = self.path('weight', CKP_DISCR_COUNTED.format(
                                 e=epoch, s=self.scale
                                 ), underline=True)
-        if (epoch-self.start_epoch) % self.settings.trace_freq == 0:
+        if epoch % self.settings.trace_freq == 0:
             torch.save(state, history_path)
         # Save latest
         latest_path = self.path(

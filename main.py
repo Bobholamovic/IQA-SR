@@ -80,7 +80,6 @@ def parse_args():
     parser.add_argument('--suffix-off', action='store_true')
     parser.add_argument('--anew', action='store_true',
                         help='clear history and start from epoch 0 with the checkpoint loaded')
-    parser.add_argument('--continu', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
     parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-NRIQA/models/ckp_MA.pkl')
