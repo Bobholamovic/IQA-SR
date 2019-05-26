@@ -136,11 +136,11 @@ class _TreeNode:
         queue = []
         queue.insert(0, self)
         while(queue):
-            root = queue.pop()
-            yield root
-            if root.is_leaf():
+            curr = queue.pop()
+            yield curr
+            if curr.is_leaf():
                 continue
-            for c in root.children.values():
+            for c in curr.children.values():
                 queue.insert(0, c)
 
 
@@ -266,9 +266,12 @@ class OutPathGetter:
         )
 
         self.update_keys(False)
-        self.update_tree(True)
+        self.update_tree(False)
 
         self.__counter = 0
+
+    def __str__(self):
+        return '\n'+self.sub_dirs
 
     @property
     def sub_dirs(self):

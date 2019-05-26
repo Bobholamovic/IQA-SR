@@ -45,7 +45,7 @@ class SRDataset(torch.utils.data.Dataset):
             # or from a folder as the lr inputs. 
             return name, self.to_tensor_lr(hr_img)
         else:
-            hr_img = mod_crop(hr_img, self.scale)
+            # hr_img = mod_crop(hr_img, self.scale)
             if self.lr_avai:
                 lr_img = self._fetch_lr(index)
             else:
@@ -130,17 +130,17 @@ class SRDataset(torch.utils.data.Dataset):
     def tensor_to_image(cls, tensor, mode='hr'):
         assert tensor.ndimension() == 3
         t2a = getattr(cls, 'to_array_'+mode)
-        return cls._clamp(t2a(tensor)).astype(np.uint8)
+        return cls._quantize(t2a(tensor))
 
     @classmethod
     def array_to_image_lr(cls, arr):
         assert arr.ndim == 3
-        return cls._clamp(cls.denormalize(arr, 'lr')).astype(np.uint8)
+        return cls._quantize(cls.denormalize(arr, 'lr'))
 
     @classmethod
     def array_to_image_hr(cls, arr):
         assert arr.ndim == 3
-        return cls._clamp(cls.denormalize(arr, 'hr')).astype(np.uint8)
+        return cls._quantize(cls.denormalize(arr, 'hr'))
 
     @classmethod
     def to_tensor_lr(cls, arr):
@@ -159,8 +159,21 @@ class SRDataset(torch.utils.data.Dataset):
         return cls.denormalize(to_array(tensor), 'hr')
 
     @staticmethod
-    def _clamp(arr):
-        return np.clip(arr, 0, 255)
+    def _quantize(arr):
+        return np.clip(arr, 0, 255).astype('uint8')
+
+
+class DefaultDataset(SRDataset):
+    _mean = np.asarray([124.46190829, 115.98740693, 104.40056142])
+    _std = np.asarray([63.25935824, 61.56368587, 63.60759291])
+    
+    @classmethod
+    def normalize(cls, x, mode='lr'):
+        return x/255.0
+
+    @classmethod
+    def denormalize(cls, x, mode='hr'):
+        return x*255.0
 
 
 class WaterlooDataset(SRDataset):

@@ -3,11 +3,9 @@ import argparse
 import os
 import yaml
 import shutil
-from time import localtime
-from os.path import join, basename, exists
-from pdb import set_trace as db
+from os.path import basename, exists
 
-from core.trainer import SRTrainer, GANTrainer
+from core.trainer import SRTrainer
 from core.predictor import SRPredictor
 from utils.misc import OutPathGetter
 
@@ -28,7 +26,7 @@ def parse_config(cfg_name, cfg):
     # Parse feats
     if cfg.__contains__('feats'):
         # The feature names are stored in sequential along with their weights.
-        # What is to be done here is to separate them into two tuples
+        # What is done here is to separate them into two tuples
         feat_names, weights = zip(*(tuple(*f.items()) for f in cfg['feats']))
         del cfg['feats']
         cfg.update({
@@ -57,18 +55,18 @@ def parse_args():
     parser.add_argument('-l', '--list-dir', default='/home/gdf/Datasets/DIV2K/lists/X4/')
     parser.add_argument('-o', '--out-dir', default='')
     parser.add_argument('-p', '--patch-size', type=int, default=256, metavar='P', 
-                        help='patch size (default: 64)')
+                        help='patch size (default: %(default)s)')
     parser.add_argument('--exp-dir', default='./exps/')
     parser.add_argument('--step', type=int, default=200)
     parser.add_argument('--batch-size', type=int, default=32, metavar='B',
-                        help='input batch size for training (default: 32)')
+                        help='input batch size for training (default: %(default)s)')
     parser.add_argument('--num-epochs', type=int, default=1000, metavar='NE',
-                        help='number of epochs to train (default: 1000)')
+                        help='number of epochs to train (default: %(default)s)')
     parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
-                        help='learning rate (default: 1e-4)')
+                        help='learning rate (default: %(default)s)')
     parser.add_argument('--lr-mode', type=str, default='const')
     parser.add_argument('--weight-decay', default=1e-4, type=float,
-                        metavar='W', help='weight decay (default: 1e-4)')
+                        metavar='W', help='weight decay (default: %(default)s)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint')
     parser.add_argument('--num-workers', type=int, default=8)
@@ -85,7 +83,7 @@ def parse_args():
     parser.add_argument('--continu', action='store_true')
     parser.add_argument('--iqa-patch-size', type=int, default=32)
     parser.add_argument('--criterion', type=str, default='MAE')
-    parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-FRIQA/models/ckp_Waterloo.pkl')
+    parser.add_argument('--iqa-model-path', type=str, default='/home/gdf/Codes/CNN-NRIQA/models/ckp_MA.pkl')
     parser.add_argument('--trace-freq', type=int, default=50)
     parser.add_argument('--reproduce', type=int, default=1)
     parser.add_argument('--alpha', type=float, default=1.0, help='weighting coefficient of pixel loss')
@@ -120,7 +118,7 @@ def main():
     args = parse_args()
 
     if args.cmd == 'train':
-        solver = GANTrainer(args)   # SRTrainer(args)
+        solver = SRTrainer(args)
         solver.train()
     elif args.cmd == 'val':
         solver = SRTrainer(args)
