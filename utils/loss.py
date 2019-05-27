@@ -36,6 +36,8 @@ class IQALoss(nn.Module):
         ]
         self.regular = 'nr' in feat_names
         self._denorm = get_dataset(DATASET).denormalize
+        # from utils.ms_ssim import MS_SSIM
+        # self._msssim = MS_SSIM(max_val=1.0)
 
     def forward(self, output, target):
         self.iqa_model.eval()   # Switch to eval
@@ -50,8 +52,13 @@ class IQALoss(nn.Module):
 
         # losses = [F.mse_loss(feat_o[n], feat_t[n]) for n in self.feat_names]
 
+        h, w = output.size(-2), output.size(-1)
+        nh, nw = h//self.patch_size, w//self.patch_size
         losses = [
-            F.mse_loss(fo, ft)
+            self.calc_perc_loss(
+                self._tile_patches(fo, nh, nw), 
+                self._tile_patches(ft, nh, nw)
+            )
             for fo, ft 
             in zip(feat_o, feat_t)
         ]
@@ -86,6 +93,20 @@ class IQALoss(nn.Module):
         #     torch.randperm(n)[:n//2].to(patchs.device)
         # )
         return patchs
+
+    def _tile_patches(self, patches, nh, nw):
+        r"""
+            The inverse operation of _extract_patches
+            Note that this method could be applied on intermediate
+            feature layers with h and w smaller than patch_size.
+
+            nh and nw correspond to the number of patches cropped from
+            the input image along the vertical and horizontal axes.
+        """
+        vpatches = torch.cat(torch.chunk(patches, nw, dim=1), dim=-1)
+        img = torch.cat(torch.chunk(vpatches, nh, dim=1), dim=-2).squeeze(1)
+
+        return img
 
     def prepare(self, features):
         from functools import partial
@@ -158,6 +179,27 @@ class IQALoss(nn.Module):
 
         if not is_training:
             self.iqa_model.eval()
+
+    def calc_perc_loss(self, x1, x2):
+        # # Normalize to [0,1]
+        # x_min = min(x1.min(), x2.min())
+        # x1 -= x_min
+        # x2 -= x_min
+        # x_max = max(x1.max(), x2.max())
+        # x1 /= x_max
+        # x2 /= x_max
+        # return 1.0 - self._msssim(x1, x2)
+
+        # Style loss
+        def compute_gram(y):
+            # Compute Gram matrix
+            # Copied from https://github.com/eriklindernoren/Fast-Neural-Style-Transfer/blob/master/utils.py
+            (b, c, h, w) = y.size()
+            features = y.view(b, c, w * h)
+            features_t = features.transpose(1, 2)
+            return features.bmm(features_t) / (c * h * w)
+        
+        return F.mse_loss(compute_gram(x1), compute_gram(x2))
 
 
 class ComLoss(nn.Module):
