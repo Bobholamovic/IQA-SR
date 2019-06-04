@@ -94,8 +94,10 @@ class IQANet(nn.Module):
         #     score = torch.mean(y.view(n_imgs, n_ptchs_per_img), dim=1)
 
         # score = torch.mean(y.view(n_imgs, n_ptchs_per_img), dim=1)
+        score = y.view(n_imgs, n_ptchs_per_img)
+        score = torch.sigmoid(score)
 
-        return y.view(n_imgs, n_ptchs_per_img)  # score.squeeze()
+        return score.squeeze()
 
     def _initialize_weights(self):
         for m in self.modules():
