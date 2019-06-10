@@ -199,10 +199,10 @@ class IQALoss(nn.Module):
         #     return features.bmm(features_t) / (c * h * w)
         
         # return F.mse_loss(compute_gram(x1), compute_gram(x2))
-        # return F.l1_loss(x1, x2)
-        x1 = x1.view(x1.size(0), -1)
-        x2 = x2.view(x2.size(0), -1)
-        return (1. - F.cosine_similarity(x1, x2, dim=1)).mean()
+        return F.l1_loss(x1, x2)
+        # x1 = x1.view(x1.size(0), -1)
+        # x2 = x2.view(x2.size(0), -1)
+        # return (1. - F.cosine_similarity(x1, x2, dim=1)).mean()
 
 
 class ComLoss(nn.Module):

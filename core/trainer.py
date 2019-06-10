@@ -137,7 +137,7 @@ class Trainer:
         
         num_to_update = len(update_dict)
         if (num_to_update < len(state_dict)) or (len(state_dict) < len(ckp_dict)):
-            if self.phase == 'val':
+            if self.phase == 'val' and (num_to_update < len(state_dict)):
                 self.logger.error("=> mismatched checkpoint for validation")
                 return False
             self.logger.warning("warning: trying to load an mismatched checkpoint")
