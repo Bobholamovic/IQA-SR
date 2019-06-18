@@ -15,10 +15,10 @@ IMAGE_POSTFIXES = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']
 NPZ_POSTFIXES = ['.npz', '.pt']
 
 # Network architecture
-ARCH = 'EDSR_RESIZE_CONV'
+ARCH = 'EDSR'
 
 # Dataset on training
-DATASET = 'Default'
+DATASET = 'DIV2K'
 # Expected names of data lists
 IMAGE_LIST_PATTERN = "{ph!s}_list.txt"
 LR_LIST_PATTERN = "{ph!s}_list_lr.txt"

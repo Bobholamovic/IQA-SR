@@ -137,9 +137,8 @@ class IQALoss(nn.Module):
             h.remove()
 
     def renormalize(self, img):
-        # # Clamp to [0, 255] before normalizing
-        # return torch.clamp(self._denorm(img, 'hr'), 0, 255)/255.0
-        return img
+        # Clamp to [0, 255] before normalizing
+        return torch.clamp(self._denorm(img, 'hr'), 0, 255)/255.0
 
     def freeze(self):
         # Freeze the parameters
