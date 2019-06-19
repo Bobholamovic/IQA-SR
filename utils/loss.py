@@ -54,8 +54,8 @@ class IQALoss(nn.Module):
         nh, nw = h//self.patch_size, w//self.patch_size
         losses = [
             self.calc_perc_loss(
-                self._tile_patches(fo, nh, nw), 
-                self._tile_patches(ft, nh, nw)
+                fo, # self._tile_patches(fo, nh, nw), 
+                ft  # self._tile_patches(ft, nh, nw)
             )
             for fo, ft 
             in zip(feat_o, feat_t)
@@ -101,6 +101,9 @@ class IQALoss(nn.Module):
             nh and nw correspond to the number of patches cropped from
             the input image along the vertical and horizontal axes.
         """
+        if patches.dim() == 4:
+            # Collapse dimension 0 and make a 5-D tensor
+            patches = patches.view(-1, nw*nh, *patches.size()[-3:])
         vpatches = torch.cat(torch.chunk(patches, nw, dim=1), dim=-1)
         img = torch.cat(torch.chunk(vpatches, nh, dim=1), dim=-2).squeeze(1)
 

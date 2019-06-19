@@ -273,7 +273,7 @@ class SRTrainer(Trainer):
             losses.update(loss.data, n=self.batch_size)
             pixel_loss.update(pl.data, n=self.batch_size)
             feat_loss.update(fl.data, n=self.batch_size)
-             
+            
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -312,9 +312,9 @@ class SRTrainer(Trainer):
 
                 losses.update(sr, hr)
 
-                lr = to_image(lr.squeeze(0), 'lr')
-                sr = to_image(sr.squeeze(0))
-                hr = to_image(hr.squeeze(0))
+                lr = to_image(lr.squeeze(0).cpu(), 'lr')
+                sr = to_image(sr.squeeze(0).cpu())
+                hr = to_image(hr.squeeze(0).cpu())
 
                 psnr.update(sr, hr)
                 ssim.update(sr, hr)

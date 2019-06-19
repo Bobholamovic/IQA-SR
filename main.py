@@ -14,6 +14,10 @@ from utils.misc import OutPathGetter
 import warnings
 warnings.filterwarnings('ignore')
 
+import torch
+torch.manual_seed(1)
+torch.cuda.manual_seed(1)
+
 
 def read_config(config_path):
     f = open(config_path, 'r')
