@@ -369,9 +369,9 @@ class JointTrainer(SRTrainer):
         assert hasattr(settings, 'weights')
         super().__init__(settings)
         self.assessor = self.criterion.iqa_loss
-        self.iqa_optim = torch.optim.RMSprop(
+        self.iqa_optim = torch.optim.Adam(
             self.assessor.parameters(), 
-            lr=5e-6, 
+            lr=1e-4, 
             weight_decay=0.0
         )
         self.assessor.freeze()
@@ -404,7 +404,7 @@ class JointTrainer(SRTrainer):
                 m = MDSI(sr_norm*255.0, hr_norm*255.0)
                 self._margin = beta*self._margin + (1-beta)*m
 
-            if i % 1 == 0:
+            if i % 200 < 100:
                 # Train the IQA model
                 with self.assessor.learner():
                     out_lq = self.assessor.iqa_model(sr_norm)
@@ -415,20 +415,19 @@ class JointTrainer(SRTrainer):
                     self.iqa_optim.zero_grad()
                     ql.backward()
                     self.iqa_optim.step()
+            else:
+                del sr_norm, hr_norm
+                # Train the SR model
+                loss, pl, fl = self.criterion(sr, hr)
 
-            del sr_norm, hr_norm
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
 
-            # Train the SR model
-            loss, pl, fl = self.criterion(sr, hr)
-
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.iqa_optim.step()
-
-            # Update data
-            losses.update(loss.data, n=self.batch_size)
-            pixel_loss.update(pl.data, n=self.batch_size)
-            feat_loss.update(fl.data, n=self.batch_size)
+                # Update data
+                losses.update(loss.data, n=self.batch_size)
+                pixel_loss.update(pl.data, n=self.batch_size)
+                feat_loss.update(fl.data, n=self.batch_size)
 
             # Log for this mini-batch
             desc = "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
