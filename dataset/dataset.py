@@ -90,9 +90,6 @@ class SRDataset(torch.utils.data.Dataset):
         self.num = len(self.image_list)
 
     def load(self, pth):
-        return default_loader(pth)
-        # Block it for the moment as 
-        # the if-else wastes time in most cases
         if is_img(pth):
             loader = default_loader
         elif is_npz(pth):

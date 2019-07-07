@@ -5,7 +5,7 @@ import yaml
 import shutil
 from os.path import basename, exists
 
-from core.trainer import SRTrainer
+from core.trainer import SRTrainer, JointTrainer
 from core.predictor import SRPredictor
 from utils.misc import OutPathGetter
 
@@ -121,7 +121,7 @@ def main():
     args = parse_args()
 
     if args.cmd == 'train':
-        solver = SRTrainer(args)
+        solver = JointTrainer(args)
         solver.train()
     elif args.cmd == 'val':
         solver = SRTrainer(args)

@@ -38,7 +38,7 @@ class IQALoss(nn.Module):
         self._denorm = get_dataset(DATASET).denormalize
 
     def forward(self, output, target):
-        self.iqa_model.eval()   # Switch to eval
+        # self.iqa_model.eval()   # Switch to eval
 
         feat_t = self.prepare(self.new_feature_dict())
         self.iqa_forward(target.data)
@@ -62,7 +62,7 @@ class IQALoss(nn.Module):
         ]
 
         if self.regular:
-            # Put nr loss on the last
+            # Put nr loss to the last
             losses.append((1.0-score_o).mean())
 
         return torch.stack(losses, dim=0)
@@ -70,7 +70,7 @@ class IQALoss(nn.Module):
     def iqa_forward(self, x):
         x = self.renormalize(x)
         
-        patches = self._extract_patches(x)
+        patches = x#self._extract_patches(x)
 
         return self.iqa_model(patches)
         
@@ -164,9 +164,9 @@ class IQALoss(nn.Module):
 
     @contextmanager
     def learner(self):
-        is_training = self.iqa_model.training
-        param_is_frozen = (
-            (n, p.requires_grad)
+        was_training = self.iqa_model.training
+        param_was_frozen = (
+            (p, p.requires_grad)
             for n, p in self.iqa_model.named_parameters()
         )
         self.unfreeze() # Unfreeze all parameters
@@ -175,9 +175,9 @@ class IQALoss(nn.Module):
         yield self.iqa_model
 
         # Revert to the original
-        for p, s in param_is_frozen: p.requires_grad = s
+        for p, s in param_was_frozen: p.requires_grad = s
 
-        if not is_training:
+        if not was_training:
             self.iqa_model.eval()
 
     def calc_perc_loss(self, x1, x2):
@@ -201,10 +201,10 @@ class IQALoss(nn.Module):
         #     return features.bmm(features_t) / (c * h * w)
         
         # return F.mse_loss(compute_gram(x1), compute_gram(x2))
-        return F.l1_loss(x1, x2)
-        # x1 = x1.view(x1.size(0), -1)
-        # x2 = x2.view(x2.size(0), -1)
-        # return (1. - F.cosine_similarity(x1, x2, dim=1)).mean()
+        # return F.l1_loss(x1, x2)
+        x1 = x1.view(x1.size(0), -1)
+        x2 = x2.view(x2.size(0), -1)
+        return (1. - F.cosine_similarity(x1, x2, dim=1)).mean()
 
 
 class ComLoss(nn.Module):

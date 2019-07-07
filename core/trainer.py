@@ -11,7 +11,7 @@ from dataset.augmentation import Compose, MSCrop, Flip
 from utils.metric import ShavedPSNR, ShavedSSIM, Metric
 from utils.loss import ComLoss
 from utils.misc import Logger
-from utils.ms_ssim import MS_SSIM
+from utils.MDSI import MDSI
 from models.sr_models import build_model
 
 from constants import ARCH, DATASET
@@ -261,6 +261,7 @@ class SRTrainer(Trainer):
         self.model.train()
         # Make sure the criterion is also set to the correct state
         self.criterion.train()
+        self.criterion.iqa_loss.eval()
 
         for i, (lr, hr) in enumerate(pb):
             # Note that the lr here means low-resolution (images)
@@ -363,28 +364,23 @@ class SRTrainer(Trainer):
         return io.imsave(out_path, image)
 
 
-class GANTrainer(SRTrainer):
+class JointTrainer(SRTrainer):
     def __init__(self, settings):
         assert hasattr(settings, 'weights')
         super().__init__(settings)
-        self.discriminator = self.criterion.iqa_loss
-        ## Hard coding here
-        self.discr_optim = torch.optim.Adam(
-            self.discriminator.parameters(), 
-            betas=(0.9, 0.999), 
-            lr=1e-4, 
-            weight_decay=1e-4
+        self.assessor = self.criterion.iqa_loss
+        self.iqa_optim = torch.optim.RMSprop(
+            self.assessor.parameters(), 
+            lr=5e-6, 
+            weight_decay=0.0
         )
-        self.discr_critn = MS_SSIM(max_val=1.0)
-        # The discriminator criterion does not require gradients
-        for p in self.discr_critn.parameters():
-            p.requires_grad = False
+        self.assessor.freeze()
 
     def train_epoch(self):
         losses = Metric()
         pixel_loss = Metric()
         feat_loss = Metric()
-        discr_loss = Metric()
+        iqa_loss = Metric()
         len_train = len(self.train_loader)
         pb = tqdm(self.train_loader)
         
@@ -397,21 +393,37 @@ class GANTrainer(SRTrainer):
             # rather than learning rate
             lr, hr = lr.cuda(), hr.cuda()
             sr = self.model(lr)
-            
+                
+            sr_norm = self.assessor.renormalize(sr.detach())
+            hr_norm = self.assessor.renormalize(hr)
+
+            if not hasattr(self, '_margin'):
+                self._margin = MDSI(sr_norm*255.0, hr_norm*255.0)
+            else:
+                beta = 0.99
+                m = MDSI(sr_norm*255.0, hr_norm*255.0)
+                self._margin = beta*self._margin + (1-beta)*m
+
             if i % 1 == 0:
-                with self.criterion.iqa_loss.learner():
-                    # Train the IQA model
-                    dl = self.discr_learn(hr, hr, 0.0)   # Good-quality images
-                    dl += self.discr_learn(sr.detach(), hr) # Bad-quality images
-                    dl /= 2
-                    discr_loss.update(dl, n=self.batch_size)
+                # Train the IQA model
+                with self.assessor.learner():
+                    out_lq = self.assessor.iqa_model(sr_norm)
+                    out_hq = self.assessor.iqa_model(hr_norm)
+                    ql = torch.nn.functional.relu(out_lq - out_hq + self._margin).mean()
+                    iqa_loss.update(ql.data, n=self.batch_size)
+
+                    self.iqa_optim.zero_grad()
+                    ql.backward()
+                    self.iqa_optim.step()
+
+            del sr_norm, hr_norm
 
             # Train the SR model
             loss, pl, fl = self.criterion(sr, hr)
+
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_value_(self.model.parameters(), 0.1)
-            self.optimizer.step()
+            self.iqa_optim.step()
 
             # Update data
             losses.update(loss.data, n=self.batch_size)
@@ -420,56 +432,36 @@ class GANTrainer(SRTrainer):
 
             # Log for this mini-batch
             desc = "[{}/{}] Loss {loss.val:.4f} ({loss.avg:.4f}) " \
-                    "DL {discr.val:.4f} ({discr.avg:.4f}) " \
+                    "QL {iqa.val:.6f} ({iqa.avg:.6f}) " \
                     "PL {pixel.val:.4f} ({pixel.avg:.4f}) " \
-                    "FL {feat.val:.6f} ({feat.avg:.6f})"\
+                    "FL {feat.val:.4f} ({feat.avg:.4f})"\
                 .format(i+1, len_train, loss=losses, 
-                        discr=discr_loss, 
+                        iqa=iqa_loss, 
                         pixel=pixel_loss, feat=feat_loss)
             pb.set_description(desc)
             self.logger.dump(desc)
 
-    def discr_learn(self, output, target, score=None):
-        score_o = self.discriminator.iqa_forward(output, target).score
-        bs = target.size(0)  # Batch size
-        if score is not None:
-            score_t = torch.FloatTensor(score) if isinstance(score, tuple) \
-                else torch.FloatTensor([score]*bs)
-            score_t = score_t.type_as(target)
-        else:
-            output = self.discriminator.renormalize(output.data)
-            target = self.discriminator.renormalize(target.data)
-            # # Ensure that the criterion is on the eval mode
-            # self.discr_critn.eval()
+    def rank_learn(self, im_sr, im_hr):
+        out_lq = self.assessor.iqa_forward(im_sr).mean(-1)
+        out_hq = self.assessor.iqa_forward(im_hr).mean(-1)
 
-            # XXX: This looks weird and I wonder if there's something
-            # like apply_along_axis in pytorch to handle this loop
-            chunks = zip(
-                torch.chunk(output, bs, dim=0), 
-                torch.chunk(target, bs, dim=0)
-            )
-            score_t = torch.stack([
-                (1.0-self.discr_critn(o, t))*100
-                for o, t 
-                in chunks
-            ])
+        # Ranking hinge loss
+        margin = 0.5
+        loss = torch.nn.functional.relu(out_lq - out_hq + margin).mean()
 
-        assert score_o.shape == score_t.shape
-        loss = torch.nn.functional.l1_loss(score_o, score_t)
-
-        self.discr_optim.zero_grad()
+        self.iqa_optim.zero_grad()
         loss.backward()
-        self.discr_optim.step()
+        self.iqa_optim.step()
 
         return loss.data    # Since the gradients are no longer needed
 
     def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
         # Save the generator checkpoint first
         super()._save_checkpoint(state_dict, max_acc, epoch, is_best)
-        # Save latest discriminator checkpoint
+        # Save latest quality assessor
         state = {
             'epoch': epoch,
-            'state_dict': self.discriminator.state_dict()
+            'state_dict': self.assessor.state_dict()
         } 
         # Save history
         history_path = self.path('weight', CKP_DISCR_COUNTED.format(
