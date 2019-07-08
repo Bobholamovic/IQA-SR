@@ -165,10 +165,11 @@ class IQALoss(nn.Module):
     @contextmanager
     def learner(self):
         was_training = self.iqa_model.training
-        param_was_frozen = (
+        param_was_frozen = [
             (p, p.requires_grad)
-            for n, p in self.iqa_model.named_parameters()
-        )
+            for p in self.iqa_model.parameters()
+        ]
+
         self.unfreeze() # Unfreeze all parameters
         self.iqa_model.train()
 
@@ -179,6 +180,7 @@ class IQALoss(nn.Module):
 
         if not was_training:
             self.iqa_model.eval()
+
 
     def calc_perc_loss(self, x1, x2):
         # from utils.ms_ssim import MS_SSIM
@@ -191,16 +193,16 @@ class IQALoss(nn.Module):
         # x2 /= x_max
         # return 1.0 - MS_SSIM(max_val=1.0, channel=x1.size(1))(x1, x2)
 
-        # # Style loss
-        # def compute_gram(y):
-        #     # Compute Gram matrix
-        #     # Copied from https://github.com/eriklindernoren/Fast-Neural-Style-Transfer/blob/master/utils.py
-        #     (b, c, h, w) = y.size()
-        #     features = y.view(b, c, w * h)
-        #     features_t = features.transpose(1, 2)
-        #     return features.bmm(features_t) / (c * h * w)
-        
-        # return F.mse_loss(compute_gram(x1), compute_gram(x2))
+        # Style loss
+        def compute_gram(y):
+            # Compute Gram matrix
+            # Copied from https://github.com/eriklindernoren/Fast-Neural-Style-Transfer/blob/master/utils.py
+            (b, c, h, w) = y.size()
+            features = y.view(b, c, w * h)
+            features_t = features.transpose(1, 2)
+            return features.bmm(features_t) / (c * h * w)
+
+        return F.l1_loss(compute_gram(x1), compute_gram(x2))
         # return F.l1_loss(x1, x2)
         x1 = x1.view(x1.size(0), -1)
         x2 = x2.view(x2.size(0), -1)

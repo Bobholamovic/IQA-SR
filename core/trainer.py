@@ -369,11 +369,6 @@ class JointTrainer(SRTrainer):
         assert hasattr(settings, 'weights')
         super().__init__(settings)
         self.assessor = self.criterion.iqa_loss
-        self.iqa_optim = torch.optim.Adam(
-            self.assessor.parameters(), 
-            lr=1e-4, 
-            weight_decay=0.0
-        )
         self.assessor.freeze()
 
     def train_epoch(self):
@@ -404,14 +399,19 @@ class JointTrainer(SRTrainer):
                 m = MDSI(sr_norm*255.0, hr_norm*255.0)
                 self._margin = beta*self._margin + (1-beta)*m
 
-            if i % 200 < 100:
+            if i % 1000 < 200:
                 # Train the IQA model
                 with self.assessor.learner():
                     out_lq = self.assessor.iqa_model(sr_norm)
                     out_hq = self.assessor.iqa_model(hr_norm)
                     ql = torch.nn.functional.relu(out_lq - out_hq + self._margin).mean()
                     iqa_loss.update(ql.data, n=self.batch_size)
-
+                    # Get a new optimizer
+                    self.iqa_optim = torch.optim.Adam(
+                        self.assessor.parameters(), 
+                        lr=1e-4,
+                        weight_decay=0.0
+                    )
                     self.iqa_optim.zero_grad()
                     ql.backward()
                     self.iqa_optim.step()
@@ -419,7 +419,11 @@ class JointTrainer(SRTrainer):
                 del sr_norm, hr_norm
                 # Train the SR model
                 loss, pl, fl = self.criterion(sr, hr)
-
+                # self.optimizer = torch.optim.Adam(self.model.parameters(),
+                #                                 betas=(0.9,0.999),
+                #                                 lr=self.lr,
+                #                                 weight_decay=self.settings.weight_decay
+                #                                 )
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
