@@ -1,5 +1,6 @@
 import shutil
 import os
+from pdb import set_trace as db
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -372,6 +373,7 @@ class JointTrainer(SRTrainer):
         self.assessor.freeze()
 
     def train_epoch(self):
+        if hasattr(self, '_margin'): print(self._margin)
         losses = Metric()
         pixel_loss = Metric()
         feat_loss = Metric()
@@ -390,14 +392,20 @@ class JointTrainer(SRTrainer):
             sr = self.model(lr)
                 
             sr_norm = self.assessor.renormalize(sr.detach())
+            # Clamp and scale
+            sr_norm_cs = torch.clamp(sr_norm, 0, 1)*255.0
             hr_norm = self.assessor.renormalize(hr)
+            hr_norm_cs = torch.clamp(hr_norm, 0, 1)*255.0
 
             if not hasattr(self, '_margin'):
-                self._margin = MDSI(sr_norm*255.0, hr_norm*255.0)
+                self._margin = MDSI(sr_norm_cs, hr_norm_cs)
+                print(self._margin)
             else:
                 beta = 0.99
-                m = MDSI(sr_norm*255.0, hr_norm*255.0)
+                m = MDSI(sr_norm_cs, hr_norm_cs)
                 self._margin = beta*self._margin + (1-beta)*m
+
+            del sr_norm_cs, hr_norm_cs
 
             if i % 1000 < 200:
                 # Train the IQA model

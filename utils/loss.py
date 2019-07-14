@@ -140,8 +140,9 @@ class IQALoss(nn.Module):
             h.remove()
 
     def renormalize(self, img):
-        # Clamp to [0, 255] before normalizing
-        return torch.clamp(self._denorm(img, 'hr'), 0, 255)/255.0
+        # # Clamp to [0, 255] before normalizing
+        # return torch.clamp(self._denorm(img, 'hr'), 0, 255)/255.0
+        return self._denorm(img, 'hr')/255.0
 
     def freeze(self):
         # Freeze the parameters
@@ -202,8 +203,12 @@ class IQALoss(nn.Module):
             features_t = features.transpose(1, 2)
             return features.bmm(features_t) / (c * h * w)
 
-        return F.l1_loss(compute_gram(x1), compute_gram(x2))
-        # return F.l1_loss(x1, x2)
+        x1 = self._extract_patches(x1)
+        x1 = x1.view(-1, *x1.size()[-3:])
+        x2 = self._extract_patches(x2)
+        x2 = x2.view(-1, *x2.size()[-3:])
+        return F.mse_loss(compute_gram(x1), compute_gram(x2))
+        return F.l1_loss(x1, x2)
         x1 = x1.view(x1.size(0), -1)
         x2 = x2.view(x2.size(0), -1)
         return (1. - F.cosine_similarity(x1, x2, dim=1)).mean()
