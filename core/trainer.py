@@ -385,6 +385,13 @@ class JointTrainer(SRTrainer):
         # Make sure the criterion is also set to the correct state
         self.criterion.train()
 
+        # Get a new optimizer
+        self.iqa_optim = torch.optim.Adam(
+            self.assessor.parameters(), 
+            lr=1e-4,
+            weight_decay=0.0
+        )
+
         for i, (lr, hr) in enumerate(pb):
             # Note that the lr here means low-resolution (images)
             # rather than learning rate
@@ -407,19 +414,16 @@ class JointTrainer(SRTrainer):
 
             del sr_norm_cs, hr_norm_cs
 
-            if i % 1000 < 200:
+            if i % 500 < 200:
                 # Train the IQA model
                 with self.assessor.learner():
                     out_lq = self.assessor.iqa_model(sr_norm)
                     out_hq = self.assessor.iqa_model(hr_norm)
+                    # Ranking hinge loss
                     ql = torch.nn.functional.relu(out_lq - out_hq + self._margin).mean()
+                    # ql = torch.nn.functional.l1_loss(out_lq, MDSI(sr_norm_cs, hr_norm_cs))
+                    # ql += torch.nn.functional.l1_loss(out_hq, torch.tensor(1.0).type_as(out_hq))
                     iqa_loss.update(ql.data, n=self.batch_size)
-                    # Get a new optimizer
-                    self.iqa_optim = torch.optim.Adam(
-                        self.assessor.parameters(), 
-                        lr=1e-4,
-                        weight_decay=0.0
-                    )
                     self.iqa_optim.zero_grad()
                     ql.backward()
                     self.iqa_optim.step()
@@ -427,11 +431,7 @@ class JointTrainer(SRTrainer):
                 del sr_norm, hr_norm
                 # Train the SR model
                 loss, pl, fl = self.criterion(sr, hr)
-                # self.optimizer = torch.optim.Adam(self.model.parameters(),
-                #                                 betas=(0.9,0.999),
-                #                                 lr=self.lr,
-                #                                 weight_decay=self.settings.weight_decay
-                #                                 )
+
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -451,20 +451,6 @@ class JointTrainer(SRTrainer):
                         pixel=pixel_loss, feat=feat_loss)
             pb.set_description(desc)
             self.logger.dump(desc)
-
-    def rank_learn(self, im_sr, im_hr):
-        out_lq = self.assessor.iqa_forward(im_sr).mean(-1)
-        out_hq = self.assessor.iqa_forward(im_hr).mean(-1)
-
-        # Ranking hinge loss
-        margin = 0.5
-        loss = torch.nn.functional.relu(out_lq - out_hq + margin).mean()
-
-        self.iqa_optim.zero_grad()
-        loss.backward()
-        self.iqa_optim.step()
-
-        return loss.data    # Since the gradients are no longer needed
 
     def _save_checkpoint(self, state_dict, max_acc, epoch, is_best):
         # Save the generator checkpoint first
