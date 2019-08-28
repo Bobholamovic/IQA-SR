@@ -105,8 +105,8 @@ class SRPredictor(Predictor):
 
                 sr = self.model(lr)
 
-                lr = to_image(lr.squeeze(0), 'lr')
-                sr = to_image(sr.squeeze(0))
+                lr = to_image(lr.squeeze(0).cpu(), 'lr')
+                sr = to_image(sr.squeeze(0).cpu(), 'hr')
 
                 desc = "[Epoch {}] [{}/{}] {}".format(
                     self.epoch, i+1, len_test, name
